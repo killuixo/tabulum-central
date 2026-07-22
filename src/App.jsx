@@ -109,13 +109,30 @@ const AppProvider = ({ children }) => {
                 let useMock = false;
 
                 // Tenta buscar online via Variáveis de Ambiente
-                if (URLS.leads) leadsRaw = await fetchJSON(URLS.leads) || [];
-                if (URLS.emendas) emendasRaw = await fetchJSON(URLS.emendas) || [];
-                if (URLS.agenda) agendaRaw = await fetchJSON(URLS.agenda) || [];
-                if (URLS.contatos) contatosRaw = await fetchJSON(URLS.contatos) || [];
                 if (URLS.dadosGerais) {
+                    setLoadingInfo({ isLoading: true, stage: 'Carregando Dados Gerais...', progress: 20 });
                     const dg = await fetchJSON(URLS.dadosGerais);
                     if (dg) { estadoRaw = dg.estado || []; capitalRaw = dg.capital || []; }
+                }
+
+                if (URLS.leads) {
+                    setLoadingInfo({ isLoading: true, stage: 'Carregando Leads...', progress: 40 });
+                    leadsRaw = await fetchJSON(URLS.leads) || [];
+                }
+
+                if (URLS.emendas) {
+                    setLoadingInfo({ isLoading: true, stage: 'Carregando Emendas...', progress: 50 });
+                    emendasRaw = await fetchJSON(URLS.emendas) || [];
+                }
+
+                if (URLS.agenda) {
+                    setLoadingInfo({ isLoading: true, stage: 'Carregando Agenda...', progress: 60 });
+                    agendaRaw = await fetchJSON(URLS.agenda) || [];
+                }
+
+                if (URLS.contatos) {
+                    setLoadingInfo({ isLoading: true, stage: 'Carregando Lideranças (CRM)...', progress: 70 });
+                    contatosRaw = await fetchJSON(URLS.contatos) || [];
                 }
 
                 // Fallback para Mock se as variáveis não estiverem configuradas (Ambiente de Teste)
@@ -280,16 +297,21 @@ const Dashboard = () => {
         const bairrosVotos24 = {};
         let totalCap22 = 0;
         let totalCap24 = 0;
+        let invalidCapCount = 0;
 
         capital.forEach(c => {
             const b = normalizeStr(c.Bairro || c['Local exato'] || 'Desconhecido');
-            if (b && !isInvalid(b)) {
-                const v22 = getVotos(c, 2022);
-                const v24 = getVotos(c, 2024);
-                bairrosVotos22[b] = (bairrosVotos22[b] || 0) + v22;
-                bairrosVotos24[b] = (bairrosVotos24[b] || 0) + v24;
-                totalCap22 += v22;
-                totalCap24 += v24;
+            if (b) {
+                if (isInvalid(b)) {
+                    invalidCapCount++;
+                } else {
+                    const v22 = getVotos(c, 2022);
+                    const v24 = getVotos(c, 2024);
+                    bairrosVotos22[b] = (bairrosVotos22[b] || 0) + v22;
+                    bairrosVotos24[b] = (bairrosVotos24[b] || 0) + v24;
+                    totalCap22 += v22;
+                    totalCap24 += v24;
+                }
             }
         });
 
@@ -298,16 +320,21 @@ const Dashboard = () => {
         const municipiosVotos22 = {};
         let totalSC18 = 0;
         let totalSC22 = 0;
+        let invalidSCCount = 0;
 
         estado.forEach(e => {
             const m = normalizeStr(e.Cidade);
-            if (m && !isFloripa(m) && !isInvalid(m)) {
-                const v18 = getVotos(e, 2018);
-                const v22 = getVotos(e, 2022);
-                municipiosVotos18[m] = (municipiosVotos18[m] || 0) + v18;
-                municipiosVotos22[m] = (municipiosVotos22[m] || 0) + v22;
-                totalSC18 += v18;
-                totalSC22 += v22;
+            if (m && !isFloripa(m)) {
+                if (isInvalid(m)) {
+                    invalidSCCount++;
+                } else {
+                    const v18 = getVotos(e, 2018);
+                    const v22 = getVotos(e, 2022);
+                    municipiosVotos18[m] = (municipiosVotos18[m] || 0) + v18;
+                    municipiosVotos22[m] = (municipiosVotos22[m] || 0) + v22;
+                    totalSC18 += v18;
+                    totalSC22 += v22;
+                }
             }
         });
 
@@ -347,7 +374,7 @@ const Dashboard = () => {
             lideCap, lideSC, totalEmendas, 
             totalVotos22: totalSC22 + totalCap22, 
             topSC, topCap,
-            topTemas, invalidTemasCount
+            topTemas, invalidTemasCount, invalidSCCount, invalidCapCount
         };
     }, [estado, capital, contatos, leads, emendas]);
 
@@ -450,6 +477,11 @@ const Dashboard = () => {
                             ))}
                             {stats.topSC.length === 0 && <div className="text-xs font-bold text-gray-400 uppercase">Sem dados válidos.</div>}
                         </div>
+                        {stats.invalidSCCount > 0 && (
+                            <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 text-right">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">* Registros sem local definido: {stats.invalidSCCount}</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="hidden md:block w-px bg-gray-300"></div>
@@ -470,6 +502,11 @@ const Dashboard = () => {
                             ))}
                             {stats.topCap.length === 0 && <div className="text-xs font-bold text-gray-400 uppercase">Sem dados válidos.</div>}
                         </div>
+                        {stats.invalidCapCount > 0 && (
+                            <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 text-right">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">* Registros sem local definido: {stats.invalidCapCount}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
