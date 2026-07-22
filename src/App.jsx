@@ -78,7 +78,9 @@ const Icons = {
     Filter: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>,
     Building: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="22" x2="9" y2="22"></line><line x1="15" y1="22" x2="15" y2="22"></line><line x1="9" y1="6" x2="9.01" y2="6"></line><line x1="15" y1="6" x2="15.01" y2="6"></line><line x1="9" y1="10" x2="9.01" y2="10"></line><line x1="15" y1="10" x2="15.01" y2="10"></line><line x1="9" y1="14" x2="9.01" y2="14"></line><line x1="15" y1="14" x2="15.01" y2="14"></line></svg>,
     Briefcase: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>,
-    List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+    List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>,
+    SortAsc: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square"><polyline points="18 15 12 9 6 15"></polyline></svg>,
+    SortDesc: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square"><polyline points="6 9 12 15 18 9"></polyline></svg>
 };
 
 const AppContext = createContext();
@@ -91,7 +93,7 @@ const AppProvider = ({ children }) => {
     // Controles de Navegação e Filtro
     const [selectedEntity, setSelectedEntity] = useState(null); 
     const [territoryScope, setTerritoryScope] = useState('ALL'); // 'ALL' | 'CAPITAL' | 'INTERIOR'
-    const [includeFloripa, setIncludeFloripa] = useState(false); // Chave para incluir Floripa no Estado
+    const [includeFloripa, setIncludeFloripa] = useState(false); // Chave para incluir Floripa no Estado (Default = FALSE)
     const [globalFilters, setGlobalFilters] = useState({ temas: [], regioes: [] });
     const [mainView, setMainView] = useState('dashboard'); // 'dashboard', 'lista_sc', 'lista_floripa'
 
@@ -214,32 +216,78 @@ const AppProvider = ({ children }) => {
     );
 };
 
-const NativeBarChart = ({ data, colorClass, valueFormatter = (v) => v, maxItems = 5, invalidLabel = 'Não Definidos', invalidValue = 0 }) => {
-    const sorted = [...data].sort((a, b) => b.value - a.value).slice(0, maxItems);
-    const maxVal = sorted.length > 0 ? sorted[0].value : 1;
+// Componente Gráfico Unificado (Suporta barras simples e empilhadas, com ordenação e filtro de 0)
+const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, maxItems = 5, invalidLabel = 'Não Definidos', invalidValue = 0, isStacked = false }) => {
+    const [sortDesc, setSortDesc] = useState(true);
 
-    if (sorted.length === 0) return <div className="p-4 text-gray-500 font-bold text-sm uppercase">Sem dados cruzados para este filtro.</div>;
+    // Filtra zeros e strings inválidas. 
+    // Em stacked: a soma dos segmentos não pode ser 0
+    const validData = useMemo(() => {
+        return data.filter(d => {
+            const val = isStacked ? d.total : d.value;
+            return val > 0 && !isInvalidData(d.name);
+        });
+    }, [data, isStacked]);
+
+    const sortedData = useMemo(() => {
+        return [...validData].sort((a, b) => {
+            const valA = isStacked ? a.total : a.value;
+            const valB = isStacked ? b.total : b.value;
+            return sortDesc ? valB - valA : valA - valB;
+        }).slice(0, maxItems);
+    }, [validData, sortDesc, maxItems, isStacked]);
+
+    const maxVal = sortedData.length > 0 ? (isStacked ? sortedData[0].total : sortedData[0].value) : 1;
 
     return (
-        <div className="space-y-4 mt-4 flex flex-col h-full">
-            <div className="flex-1 space-y-4">
-                {sorted.map((item, idx) => (
-                    <div key={idx}>
-                        <div className="flex justify-between text-xs font-black uppercase mb-1 tracking-wider">
-                            <span className="truncate pr-4">{item.name || 'Não Informado'}</span>
-                            <span>{valueFormatter(item.value)}</span>
-                        </div>
-                        <div className="h-4 w-full bg-white border-2 border-black overflow-hidden relative">
-                            <div 
-                                className={`h-full border-r-2 border-black transition-all duration-1000 ${colorClass}`} 
-                                style={{ width: `${Math.max((item.value / maxVal) * 100, 2)}%` }}
-                            ></div>
-                        </div>
-                    </div>
-                ))}
+        <div className="flex flex-col h-full">
+            <div className="flex justify-end mb-4 border-b-2 border-black pb-2">
+                <button 
+                    onClick={() => setSortDesc(!sortDesc)} 
+                    className="text-[10px] font-black uppercase text-gray-500 hover:text-black flex items-center transition-colors"
+                >
+                    Ordem {sortDesc ? 'Decrescente' : 'Crescente'} {sortDesc ? <Icons.SortDesc /> : <Icons.SortAsc />}
+                </button>
             </div>
+            
+            <div className="flex-1 space-y-4">
+                {sortedData.length === 0 ? (
+                    <div className="p-4 text-gray-500 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Sem dados válidos (&gt;0) para este filtro.</div>
+                ) : (
+                    sortedData.map((item, idx) => (
+                        <div key={idx}>
+                            <div className="flex justify-between text-xs font-black uppercase mb-1 tracking-wider">
+                                <span className="truncate pr-4">{item.name || 'Não Informado'}</span>
+                                <span>{valueFormatter(isStacked ? item.total : item.value)}</span>
+                            </div>
+                            <div className="h-4 w-full bg-gray-100 border-2 border-black flex overflow-hidden">
+                                {isStacked ? (
+                                    item.segments.map((seg, sIdx) => {
+                                        if (seg.value === 0) return null;
+                                        const pct = (seg.value / maxVal) * 100;
+                                        return (
+                                            <div 
+                                                key={sIdx}
+                                                className={`h-full border-r-2 border-black transition-all duration-1000 ${seg.colorClass}`} 
+                                                style={{ width: `${Math.max(pct, 2)}%` }} // min 2% para visibilidade
+                                                title={`${seg.label}: ${valueFormatter(seg.value)}`}
+                                            ></div>
+                                        )
+                                    })
+                                ) : (
+                                    <div 
+                                        className={`h-full border-r-2 border-black transition-all duration-1000 ${colorClass}`} 
+                                        style={{ width: `${Math.max((item.value / maxVal) * 100, 2)}%` }}
+                                    ></div>
+                                )}
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
             {invalidValue > 0 && (
-                <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 text-right">
+                <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 text-right shrink-0">
                     <span className="text-[9px] font-bold text-gray-400 uppercase">{invalidLabel}: {valueFormatter(invalidValue)}</span>
                 </div>
             )}
@@ -474,8 +522,7 @@ const Dashboard = () => {
             });
         }
 
-        return { v18SC, v22SC, v22Cap, v24Cap, 
-                 totalAtual: (territoryScope === 'CAPITAL' ? v24Cap : (territoryScope === 'INTERIOR' ? v22SC : v22SC + v22Cap)) };
+        return { v18SC, v22SC, v22Cap, v24Cap };
     }, [estado, capital, territoryScope, includeFloripa]);
 
     const stats = {
@@ -489,11 +536,34 @@ const Dashboard = () => {
     // Cruzamentos com filtro de inválidos
     const crossChartTemasLeads = useMemo(() => {
         const map = {}; let invalid = 0;
-        [...filteredLeads, ...filteredContatos].forEach(item => { 
-            const t = item.tema;
-            if (isInvalidData(t)) invalid++; else map[t] = (map[t] || 0) + 1; 
+        
+        // Contagem de Leads
+        filteredLeads.forEach(l => {
+            const t = l.tema;
+            if (isInvalidData(t)) { invalid++; return; }
+            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
+            map[t].leads += 1;
         });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value })), invalid };
+
+        // Contagem de Contatos (Lideranças)
+        filteredContatos.forEach(c => {
+            const t = c.tema;
+            if (isInvalidData(t)) { invalid++; return; }
+            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
+            map[t].liderancas += 1;
+        });
+
+        return { 
+            data: Object.entries(map).map(([name, counts]) => ({ 
+                name, 
+                total: counts.liderancas + counts.leads,
+                segments: [
+                    { value: counts.liderancas, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
+                    { value: counts.leads, colorClass: 'bg-black', label: 'Leads' }
+                ]
+            })), 
+            invalid 
+        };
     }, [filteredLeads, filteredContatos]);
 
     const crossChartTemasEmendas = useMemo(() => {
@@ -600,12 +670,18 @@ const Dashboard = () => {
                     <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-4">Engajamento vs Investimento (Temas)</h3>
                     <div className="flex-1 space-y-6">
                         <div>
-                            <p className="text-[10px] font-black text-gray-500 uppercase mb-2">Por Volume de Lideranças + Leads</p>
-                            <NativeBarChart data={crossChartTemasLeads.data} colorClass="bg-black" maxItems={3} invalidValue={crossChartTemasLeads.invalid} invalidLabel="S/ Tema Definido" />
+                            <div className="flex justify-between items-end mb-2">
+                                <p className="text-[10px] font-black text-gray-500 uppercase">Por Volume de Contatos</p>
+                                <div className="flex gap-2 text-[9px] font-black uppercase">
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-[#C1272D] border border-black"></div> Lideranças</span>
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-black border border-black"></div> Leads</span>
+                                </div>
+                            </div>
+                            <SortableBarChart data={crossChartTemasLeads.data} isStacked={true} maxItems={4} invalidValue={crossChartTemasLeads.invalid} invalidLabel="S/ Tema Definido" />
                         </div>
                         <div className="border-t-2 border-dashed border-gray-300 pt-4">
                             <p className="text-[10px] font-black text-gray-500 uppercase mb-2">Por R$ Destinado (Emendas)</p>
-                            <NativeBarChart data={crossChartTemasEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} maxItems={3} invalidValue={crossChartTemasEmendas.invalid} invalidLabel="S/ Tema Definido" />
+                            <SortableBarChart data={crossChartTemasEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} maxItems={4} invalidValue={crossChartTemasEmendas.invalid} invalidLabel="S/ Tema Definido" />
                         </div>
                     </div>
                 </div>
@@ -614,14 +690,14 @@ const Dashboard = () => {
                     <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-full">
                         <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2">Performance Articuladores</h3>
                         <p className="text-[10px] font-bold text-gray-400 mb-4 uppercase">Volume Agendas + Emendas + Lideranças</p>
-                        <NativeBarChart data={crossChartArticuladores.data} colorClass="bg-[#C1272D]" maxItems={4} invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" />
+                        <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-[#C1272D]" maxItems={4} invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" />
                     </div>
 
                     <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-full">
                         <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2">
                             Top Locais (Lideranças + Leads)
                         </h3>
-                        <NativeBarChart data={crossChartLocais.data} colorClass="bg-[#007D8A]" maxItems={4} invalidValue={crossChartLocais.invalid} invalidLabel="Local Não Informado" />
+                        <SortableBarChart data={crossChartLocais.data} colorClass="bg-[#007D8A]" maxItems={4} invalidValue={crossChartLocais.invalid} invalidLabel="Local Não Informado" />
                     </div>
                 </div>
             </div>
@@ -669,10 +745,9 @@ const ListaMunicipios = () => {
                     </thead>
                     <tbody>
                         {items.map((m, i) => (
-                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#EAA221]/20 cursor-pointer transition-colors"
-                                onClick={() => setSelectedEntity({ type: 'municipio', name: m.municipio })}>
-                                <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase">{m.municipio}</td>
-                                <td className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase">{m.regiao}</td>
+                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#EAA221]/20 cursor-pointer transition-colors">
+                                <td onClick={() => setSelectedEntity({ type: 'municipio', name: m.municipio })} className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase hover:underline">{m.municipio}</td>
+                                <td onClick={() => setSelectedEntity({ type: 'regiao', name: m.regiao })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase hover:underline">{m.regiao}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-bold text-gray-400 text-right">{m.votos18.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-[#C1272D] text-right">{m.votos22.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-center">{m.numContatos}</td>
@@ -736,11 +811,10 @@ const ListaCapital = () => {
                     </thead>
                     <tbody>
                         {items.map((b, i) => (
-                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#007D8A]/20 cursor-pointer transition-colors"
-                                onClick={() => setSelectedEntity({ type: 'bairro', name: b.bairro })}>
-                                <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase">{b.bairro}</td>
-                                <td className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase">{b.distrito}</td>
-                                <td className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase">{b.regiao}</td>
+                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#007D8A]/20 cursor-pointer transition-colors">
+                                <td onClick={() => setSelectedEntity({ type: 'bairro', name: b.bairro })} className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase hover:underline">{b.bairro}</td>
+                                <td onClick={() => setSelectedEntity({ type: 'distrito', name: b.distrito })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase hover:underline">{b.distrito}</td>
+                                <td onClick={() => setSelectedEntity({ type: 'regiao', name: b.regiao })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase hover:underline">{b.regiao}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-bold text-gray-400 text-right">{b.votos22.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-[#007D8A] text-right">{b.votos24.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-center">{b.numContatos}</td>
@@ -864,7 +938,7 @@ const FichaCompleta = () => {
                                         <tr key={i} className="border-b-2 border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => setSelectedEntity({type: 'articulador', name: c.articulador})}>
                                             <td className="p-3">
                                                 <div className="font-black uppercase leading-tight">{c.nome}</div>
-                                                <div className="text-[9px] font-bold text-gray-500 uppercase mt-1 truncate">Articulador: <span className="text-black">{c.articulador || '-'}</span></div>
+                                                <div className="text-[9px] font-bold text-gray-500 uppercase mt-1 truncate">Articulador: <span className="text-black hover:underline">{c.articulador || '-'}</span></div>
                                             </td>
                                             <td className="p-3 text-right">
                                                 <span className="bg-gray-200 px-2 border border-black text-[9px] font-black uppercase inline-block max-w-[120px] truncate">{c.situacao || 'S/ Status'}</span>
