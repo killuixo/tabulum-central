@@ -4,7 +4,7 @@ const getEnv = (key) => {
     try { return import.meta.env[key]; } catch(e) { return ''; }
 };
 
-// As 5 URLs cruciais
+// URLs das 5 bases de dados
 const URL_LEADS = getEnv('VITE_LEADS_URL');
 const URL_EMENDAS = getEnv('VITE_EMENDAS_URL');
 const URL_AGENDA = getEnv('VITE_AGENDA_URL');
@@ -21,7 +21,7 @@ const parseCurrency = (val) => {
     return isNaN(num) ? 0 : num;
 };
 
-// Parse rigoroso de números para votos
+// Parse rigoroso e seguro para extrair números de Votos
 const parseVotos = (val) => {
     if (!val && val !== 0) return 0;
     if (typeof val === 'number') return val;
@@ -34,14 +34,18 @@ const parseVotos = (val) => {
     return isNaN(parsed) ? 0 : parsed;
 };
 
-// Busca inteligente da coluna de votos pelo ano
+// Busca fuzzy pelos valores de votos de anos específicos, ignorando porcentagens
 const getVotosValue = (obj, ano) => {
     if (!obj) return 0;
-    if (obj[`Votos ${ano}`] !== undefined) return parseVotos(obj[`Votos ${ano}`]);
+    const exato = obj[`Votos ${ano}`] || obj[`votos ${ano}`] || obj[`VOTOS ${ano}`];
+    if (exato !== undefined) return parseVotos(exato);
+
     for (const key in obj) {
         const k = String(key).toLowerCase();
-        if (k.includes(String(ano)) && (k.includes('voto') || k.includes('marquito') || k.includes('total')) && !k.includes('%') && !k.includes('validos') && !k.includes('válidos')) {
-            return parseVotos(obj[key]);
+        if (k.includes(String(ano)) && (k.includes('voto') || k.includes('marquito') || k.includes('total'))) {
+            if (!k.includes('%') && !k.includes('validos') && !k.includes('válidos') && !k.includes('proporcao')) {
+                return parseVotos(obj[key]);
+            }
         }
     }
     return 0;
@@ -58,14 +62,14 @@ const isFloripa = (str) => {
     return s.includes('florianopolis') || s.includes('floripa');
 };
 
-// Detector de dados vazios/inválidos para ignorar nos gráficos
+// Filtro implacável de dados vazios ou não definidos
 const isInvalidData = (str) => {
     if (!str) return true;
     const s = normalizeStr(str);
-    return s === '' || s === '-' || s.includes('outros') || s.includes('nao informado') || s.includes('nao definido') || s.includes('tema nao definido');
+    return s === '' || s === '-' || s === 'outros' || s.includes('nao informado') || s.includes('nao definido') || s.includes('tema nao definido');
 };
 
-// Inteligência de Temas
+// Extrator semântico de Temas a partir de origens
 const getTemaFromOrigem = (origem) => {
     if (!origem) return "Tema Não Definido";
     const o = String(origem).toLowerCase();
@@ -79,19 +83,17 @@ const getTemaFromOrigem = (origem) => {
     if (/saneamento/.test(o)) return "Cidade e Saneamento";
     if (/saúde/.test(o)) return "Saúde";
     if (/alimentos|cozinha/.test(o)) return "Segurança Alimentar";
-    return "Outros";
+    return "Outros"; // Retorna Outros para ser filtrado pelo isInvalidData no gráfico
 };
 
 const Icons = {
-    Search: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
-    MapPin: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>,
-    Users: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
-    FileText: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>,
-    Calendar: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>,
-    Filter: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>,
-    Building: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="22" x2="9" y2="22"></line><line x1="15" y1="22" x2="15" y2="22"></line><line x1="9" y1="6" x2="9.01" y2="6"></line><line x1="15" y1="6" x2="15.01" y2="6"></line><line x1="9" y1="10" x2="9.01" y2="10"></line><line x1="15" y1="10" x2="15.01" y2="10"></line><line x1="9" y1="14" x2="9.01" y2="14"></line><line x1="15" y1="14" x2="15.01" y2="14"></line></svg>,
-    Briefcase: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>,
-    List: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>,
+    Search: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+    MapPin: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>,
+    Users: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
+    FileText: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>,
+    Calendar: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>,
+    Filter: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>,
+    Briefcase: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>,
     SortAsc: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square"><polyline points="18 15 12 9 6 15"></polyline></svg>,
     SortDesc: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square"><polyline points="6 9 12 15 18 9"></polyline></svg>
 };
@@ -103,22 +105,27 @@ const AppProvider = ({ children }) => {
     const [loadingInfo, setLoadingInfo] = useState({ isLoading: true, stage: 'Iniciando...', progress: 0 });
     const [isMock, setIsMock] = useState(false);
     
-    // Controles de Navegação e Filtro
     const [selectedEntity, setSelectedEntity] = useState(null); 
-    const [territoryScope, setTerritoryScope] = useState('ALL'); // 'ALL' | 'CAPITAL' | 'INTERIOR'
-    const [includeFloripa, setIncludeFloripa] = useState(false); // Chave para incluir Floripa no Estado (Default = FALSE)
+    const [territoryScope, setTerritoryScope] = useState('ALL'); 
+    const [includeFloripa, setIncludeFloripa] = useState(false); 
     const [globalFilters, setGlobalFilters] = useState({ temas: [], regioes: [] });
-    const [mainView, setMainView] = useState('dashboard'); // 'dashboard', 'lista_sc', 'lista_floripa'
+    const [mainView, setMainView] = useState('dashboard');
 
     useEffect(() => {
         const loadData = async () => {
             setLoadingInfo({ isLoading: true, stage: 'Conectando aos servidores...', progress: 10 });
             try {
+                // Fetcher robusto para Google Apps Script com redirecionamento
                 const fetchJSON = async (url) => {
                     if(!url) return null;
-                    const res = await fetch(url);
-                    if(!res.ok) return null;
-                    return await res.json();
+                    try {
+                        const res = await fetch(url, { redirect: 'follow' });
+                        if(!res.ok) return null;
+                        return await res.json();
+                    } catch (e) {
+                        console.warn("Falha no fetch:", e);
+                        return null;
+                    }
                 };
 
                 setLoadingInfo({ isLoading: true, stage: 'Baixando Central de Leads (1/5)...', progress: 20 });
@@ -136,14 +143,14 @@ const AppProvider = ({ children }) => {
                 setLoadingInfo({ isLoading: true, stage: 'Cruzando Dados Eleitorais (5/5)...', progress: 95 });
                 let dadosGeraisRaw = await fetchJSON(URL_DADOS_GERAIS) || { estado: [], capital: [] };
 
-                // O Apps Script retorna um Array de Arrays. Precisamos converter para Array de Objetos mapeando os cabeçalhos.
+                // Transformador de Array Bidimensional para Array de Objetos Seguro
                 const transform2D = (arr) => {
                     if (!Array.isArray(arr) || arr.length < 2) return arr || [];
-                    if (!Array.isArray(arr[0])) return arr; // Se já for Array de Objetos, ignora
-                    const headers = arr[0];
+                    if (!Array.isArray(arr[0])) return arr; 
+                    const headers = arr[0].map(h => String(h).trim());
                     return arr.slice(1).map(row => {
                         const obj = {};
-                        headers.forEach((h, i) => { if (h) obj[String(h).trim()] = row[i]; });
+                        headers.forEach((h, i) => { if (h) obj[h] = row[i]; });
                         return obj;
                     });
                 };
@@ -153,40 +160,19 @@ const AppProvider = ({ children }) => {
                     capital: transform2D(dadosGeraisRaw.capital)
                 };
 
-                // Mock Fallback para prévia no chat
+                // Fallback para demonstração se a API não estiver conectada
                 if (leadsRaw.length === 0 && emendasRaw.length === 0 && dadosGerais.estado.length === 0) {
                     setIsMock(true);
-                    leadsRaw = [
-                        { nome: "João Silva", cidade: "Florianópolis", bairroReplan: "Campeche", origem: "Assinatura Horta Comunitária" },
-                        { nome: "Maria Souza", cidade: "Lages", origem: "Seminário Agroecologia" },
-                        { nome: "Carlos Mendes", cidade: "Florianópolis", bairroReplan: "Trindade", origem: "Fórum Mobilidade" }
-                    ];
-                    emendasRaw = [
-                        { "NÚMERO DA EMENDA": "202401", "MUNICÍPIO": "Florianópolis", "OBJETO": "Equipamentos Horta", "TOTAL": "150000", "TEMA": "Agricultura urbana", "ARTICULADOR": "Ana", "REGIÃO": "Grande Florianópolis" },
-                        { "NÚMERO DA EMENDA": "202402", "MUNICÍPIO": "Lages", "OBJETO": "Feira Orgânica", "TOTAL": "80000", "TEMA": "Agroecologia", "ARTICULADOR": "Beto", "REGIÃO": "Serra" }
-                    ];
-                    agendaRaw = [
-                        { "Título": "Reunião Comunitária", "Município": "Florianópolis", "Bairro": "Campeche", "Início": new Date().toISOString(), "Articulador": "Ana", "Classe de Atividade": "Comunidade" },
-                        { "Título": "Visita Técnica", "Município": "Lages", "Início": new Date().toISOString(), "Articulador": "Beto", "Classe de Atividade": "Fiscalização" }
-                    ];
-                    contatosRaw = [
-                        { lideranca: "Assoc. Moradores Campeche", base: "Base Florianópolis", municipio_bairro: "Campeche", regiao: "Sul da Ilha", distrito: "Campeche", situacao: "4 - Comprometido", temas: "Meio Ambiente", articulador: "Ana" },
-                        { lideranca: "Sindicato Trabalhadores", base: "Base Santa Catarina", municipio_bairro: "Lages", regiao: "Serra", situacao: "3 - Simpatizante", temas: "Trabalho", articulador: "Beto" }
-                    ];
+                    leadsRaw = [{ nome: "João", cidade: "Florianópolis", bairroReplan: "Campeche", origem: "Assinatura Horta" }, { nome: "Maria", cidade: "Lages", origem: "Seminário Agroecologia" }];
+                    emendasRaw = [{ "NÚMERO DA EMENDA": "202401", "MUNICÍPIO": "Florianópolis", "OBJETO": "Equipamentos", "TOTAL": "150000", "TEMA": "Agricultura urbana", "ARTICULADOR": "Ana", "REGIÃO": "Grande Florianópolis" }];
+                    agendaRaw = [{ "Título": "Reunião Comunitária", "Município": "Florianópolis", "Bairro": "Campeche", "Início": new Date().toISOString(), "Articulador": "Ana", "Classe de Atividade": "Comunidade" }];
+                    contatosRaw = [{ lideranca: "Assoc. Moradores Campeche", base: "Base Florianópolis", municipio_bairro: "Campeche", regiao: "Sul da Ilha", distrito: "Campeche", situacao: "4 - Comprometido", temas: "Meio Ambiente", articulador: "Ana" }];
                     dadosGerais = {
-                        estado: [
-                            { Cidade: "Lages", "Votos 2018": "800", "Votos 2022": "1500", "Região do Estado": "Serra" },
-                            { Cidade: "Joinville", "Votos 2018": "1200", "Votos 2022": "3200", "Região do Estado": "Norte" },
-                            { Cidade: "Florianópolis", "Votos 2018": "15000", "Votos 2022": "25000", "Região do Estado": "Grande Florianópolis" }
-                        ],
-                        capital: [
-                            { Bairro: "Campeche", Distrito: "Campeche", Região: "Sul da Ilha", "Votos 2022": "1800", "Votos 2024": "2100" },
-                            { Bairro: "Trindade", Distrito: "Sede", Região: "Centro", "Votos 2022": "1650", "Votos 2024": "1900" }
-                        ]
+                        estado: [{ Cidade: "Lages", "Votos 2018": "800", "Votos 2022": "1500", "Região do Estado": "Serra" }, { Cidade: "Florianópolis", "Votos 2018": "15000", "Votos 2022": "25000", "Região do Estado": "Grande Florianópolis" }],
+                        capital: [{ Bairro: "Campeche", Distrito: "Campeche", Região: "Sul da Ilha", "Votos 2022": "1800", "Votos 2024": "2100" }]
                     };
                 }
 
-                // Processamento
                 const leads = leadsRaw.map((l, i) => ({
                     id: `l_${i}`,
                     nome: l['NOME'] || l['nome'] || 'Anônimo',
@@ -235,7 +221,6 @@ const AppProvider = ({ children }) => {
                 setLoadingInfo({ isLoading: false, stage: 'Concluído', progress: 100 });
             }
         };
-
         loadData();
     }, []);
 
@@ -246,60 +231,57 @@ const AppProvider = ({ children }) => {
     );
 };
 
-// Componente Gráfico Unificado (Suporta barras simples e empilhadas, com ordenação e filtro de 0)
-const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, maxItems = 5, invalidLabel = 'Não Definidos', invalidValue = 0, isStacked = false }) => {
+const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, invalidLabel = 'Não Definidos', invalidValue = 0, isStacked = false }) => {
     const [sortDesc, setSortDesc] = useState(true);
 
-    // Filtra zeros e strings inválidas. 
-    // Em stacked: a soma dos segmentos não pode ser 0
-    const validData = useMemo(() => {
-        return data.filter(d => {
-            const val = isStacked ? d.total : d.value;
-            return val > 0 && !isInvalidData(d.name);
-        });
-    }, [data, isStacked]);
+    const validData = useMemo(() => data.filter(d => {
+        const val = isStacked ? d.visualTotal : d.value;
+        return val > 0 && !isInvalidData(d.name);
+    }), [data, isStacked]);
 
-    const sortedData = useMemo(() => {
-        return [...validData].sort((a, b) => {
-            const valA = isStacked ? a.total : a.value;
-            const valB = isStacked ? b.total : b.value;
-            return sortDesc ? valB - valA : valA - valB;
-        }).slice(0, maxItems);
-    }, [validData, sortDesc, maxItems, isStacked]);
+    const sortedData = useMemo(() => [...validData].sort((a, b) => {
+        const valA = isStacked ? a.visualTotal : a.value;
+        const valB = isStacked ? b.visualTotal : b.value;
+        return sortDesc ? valB - valA : valA - valB;
+    }), [validData, sortDesc, isStacked]);
 
-    const maxVal = validData.length > 0 ? Math.max(...validData.map(d => isStacked ? d.total : d.value)) : 1;
+    const maxVal = validData.length > 0 ? Math.max(...validData.map(d => isStacked ? d.visualTotal : d.value)) : 1;
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex justify-end mb-4 border-b-2 border-black pb-2">
-                <button 
-                    onClick={() => setSortDesc(!sortDesc)} 
-                    className="text-[10px] font-black uppercase text-gray-500 hover:text-black flex items-center transition-colors"
-                >
+        <div className="flex flex-col h-full overflow-hidden">
+            <div className="flex justify-between items-center mb-4 border-b-2 border-black pb-2 shrink-0">
+                {isStacked && (
+                    <div className="flex gap-2 text-[9px] font-black uppercase">
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-[#C1272D] border border-black"></div> Lideranças</span>
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-black border border-black"></div> Leads</span>
+                    </div>
+                )}
+                {!isStacked && <div></div>}
+                <button onClick={() => setSortDesc(!sortDesc)} className="text-[10px] font-black uppercase text-gray-500 hover:text-black flex items-center transition-colors">
                     Ordem {sortDesc ? 'Decrescente' : 'Crescente'} {sortDesc ? <Icons.SortDesc /> : <Icons.SortAsc />}
                 </button>
             </div>
             
-            <div className="flex-1 space-y-4">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px]">
                 {sortedData.length === 0 ? (
-                    <div className="p-4 text-gray-500 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Sem dados válidos (&gt;0) para este filtro.</div>
+                    <div className="p-4 text-gray-400 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Nenhum registro validado.</div>
                 ) : (
                     sortedData.map((item, idx) => (
                         <div key={idx}>
                             <div className="flex justify-between text-xs font-black uppercase mb-1 tracking-wider">
-                                <span className="truncate pr-4">{item.name || 'Não Informado'}</span>
-                                <span>{valueFormatter(isStacked ? item.total : item.value)}</span>
+                                <span className="truncate pr-4">{item.name}</span>
+                                <span>{isStacked ? `${item.segments[0].value} / ${item.segments[1].value}` : valueFormatter(item.value)}</span>
                             </div>
                             <div className="h-4 w-full bg-gray-100 border-2 border-black flex overflow-hidden">
                                 {isStacked ? (
                                     item.segments.map((seg, sIdx) => {
-                                        if (seg.value === 0) return null;
-                                        const pct = (seg.value / maxVal) * 100;
+                                        if (seg.visualValue === 0) return null;
+                                        const pct = (seg.visualValue / maxVal) * 100;
                                         return (
                                             <div 
                                                 key={sIdx}
                                                 className={`h-full border-r-2 border-black transition-all duration-1000 ${seg.colorClass}`} 
-                                                style={{ width: `${Math.max(pct, 2)}%` }} // min 2% para visibilidade
+                                                style={{ width: `${Math.max(pct, 1.5)}%` }} 
                                                 title={`${seg.label}: ${valueFormatter(seg.value)}`}
                                             ></div>
                                         )
@@ -307,7 +289,7 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, maxItem
                                 ) : (
                                     <div 
                                         className={`h-full border-r-2 border-black transition-all duration-1000 ${colorClass}`} 
-                                        style={{ width: `${Math.max((item.value / maxVal) * 100, 2)}%` }}
+                                        style={{ width: `${Math.max((item.value / maxVal) * 100, 1.5)}%` }}
                                     ></div>
                                 )}
                             </div>
@@ -316,11 +298,12 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, maxItem
                 )}
             </div>
 
-            {invalidValue > 0 && (
-                <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 text-right shrink-0">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase">{invalidLabel}: {valueFormatter(invalidValue)}</span>
-                </div>
-            )}
+            <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 flex justify-between shrink-0">
+                {isStacked ? (
+                    <span className="text-[8px] font-bold text-gray-400 uppercase">* Nota: Lideranças têm peso visual estratégico 10x maior que Leads.</span>
+                ) : <span></span>}
+                {invalidValue > 0 && <span className="text-[9px] font-bold text-gray-400 uppercase">{invalidLabel}: {valueFormatter(invalidValue)}</span>}
+            </div>
         </div>
     );
 };
@@ -334,9 +317,7 @@ const useSortableData = (items, config = null) => {
             sortableItems.sort((a, b) => {
                 const aValue = a[sortConfig.key];
                 const bValue = b[sortConfig.key];
-                if (typeof aValue === 'string') {
-                    return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-                }
+                if (typeof aValue === 'string') return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
                 return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
             });
         }
@@ -345,9 +326,7 @@ const useSortableData = (items, config = null) => {
 
     const requestSort = (key) => {
         let direction = 'desc'; 
-        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
-            direction = 'asc';
-        }
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') direction = 'asc';
         setSortConfig({ key, direction });
     };
 
@@ -358,7 +337,7 @@ const ThSortable = ({ label, sortKey, currentSort, onSort, widthClass="" }) => {
     const isActive = currentSort?.key === sortKey;
     return (
         <th onClick={() => onSort(sortKey)} className={`px-4 py-3 font-black border-r-2 border-black cursor-pointer hover:bg-gray-800 hover:text-white transition-colors select-none ${widthClass}`}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
                 <span>{label}</span>
                 <span className={`text-gray-400 ${isActive ? 'text-yellow-400' : 'opacity-50'}`}>
                     {isActive ? (currentSort.direction === 'asc' ? '↑' : '↓') : '↕'}
@@ -369,7 +348,7 @@ const ThSortable = ({ label, sortKey, currentSort, onSort, widthClass="" }) => {
 };
 
 const Sidebar = () => {
-    const { emendas, leads, contatos, selectedEntity, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, setMainView } = useContext(AppContext);
+    const { emendas, leads, contatos, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, setMainView } = useContext(AppContext);
     const [searchTerm, setSearchTerm] = useState('');
     
     const searchIndex = useMemo(() => {
@@ -382,7 +361,6 @@ const Sidebar = () => {
         emendas.forEach(e => {
             add('municipio', e.municipio, `Município: ${e.municipio}`);
             add('articulador', e.articulador, `Articulador: ${e.articulador}`);
-            add('regiao', e.regiao, `Região: ${e.regiao}`);
         });
         leads.forEach(l => {
             if (isFloripa(l.municipio) && l.bairro) add('bairro', l.bairro, `Bairro (Capital): ${l.bairro}`);
@@ -431,8 +409,8 @@ const Sidebar = () => {
                         </div>
                     </div>
                     {territoryScope !== 'CAPITAL' && (
-                        <label className="flex items-center space-x-2 mt-3 cursor-pointer group">
-                            <input type="checkbox" checked={includeFloripa} onChange={e => setIncludeFloripa(e.target.checked)} className="w-4 h-4 accent-black border-2 border-black" />
+                        <label className="flex items-center space-x-2 mt-3 cursor-pointer group w-fit">
+                            <input type="checkbox" checked={includeFloripa} onChange={e => setIncludeFloripa(e.target.checked)} className="w-4 h-4 accent-black border-2 border-black cursor-pointer" />
                             <span className="text-[10px] font-bold uppercase text-gray-600 group-hover:text-black">Incluir Floripa no Estado</span>
                         </label>
                     )}
@@ -442,26 +420,12 @@ const Sidebar = () => {
                     <div>
                         <label className="text-[10px] font-black uppercase tracking-widest block mb-2">Busca Universal</label>
                         <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
-                                <Icons.Search />
-                            </div>
-                            <input 
-                                type="text" 
-                                placeholder="Local, articulador, tema..." 
-                                className="block w-full pl-10 pr-3 py-3 border-4 border-black bg-white font-bold text-sm focus:outline-none focus:border-[#C1272D] transition-colors"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><Icons.Search /></div>
+                            <input type="text" placeholder="Local, articulador, tema..." className="block w-full pl-10 pr-3 py-3 border-4 border-black bg-white font-bold text-sm focus:outline-none focus:border-[#C1272D] transition-colors" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             {searchResults.length > 0 && (
                                 <ul className="absolute z-50 w-full mt-2 bg-white border-4 border-black max-h-60 overflow-auto shadow-[4px_4px_0_0_rgba(17,17,17,1)]">
                                     {searchResults.map((res, idx) => (
-                                        <li 
-                                            key={idx} 
-                                            className="px-4 py-3 hover:bg-[#EAA221] cursor-pointer text-xs font-bold uppercase border-b-2 border-black last:border-0"
-                                            onClick={() => { setSelectedEntity({type: res.type, name: res.name}); setSearchTerm(''); }}
-                                        >
-                                            {res.label}
-                                        </li>
+                                        <li key={idx} className="px-4 py-3 hover:bg-[#EAA221] cursor-pointer text-xs font-bold uppercase border-b-2 border-black last:border-0" onClick={() => { setSelectedEntity({type: res.type, name: res.name}); setSearchTerm(''); }}>{res.label}</li>
                                     ))}
                                 </ul>
                             )}
@@ -472,7 +436,6 @@ const Sidebar = () => {
                         <div className="flex items-center text-[10px] font-black uppercase tracking-widest mb-3 border-b-2 border-black pb-2">
                             <Icons.Filter /> <span className="ml-2">Filtros Cruzados</span>
                         </div>
-                        
                         <div className="space-y-4">
                             {territoryScope !== 'CAPITAL' && (
                                 <div>
@@ -487,7 +450,6 @@ const Sidebar = () => {
                                     </div>
                                 </div>
                             )}
-
                             <div>
                                 <label className="text-[10px] font-bold uppercase text-gray-500 block mb-2">Temas de Atuação</label>
                                 <div className="max-h-40 overflow-y-auto border-2 border-black bg-white p-2 space-y-1 custom-scrollbar">
@@ -510,12 +472,11 @@ const Sidebar = () => {
 const Dashboard = () => {
     const { leads, emendas, agenda, contatos, estado, capital, globalFilters, territoryScope, includeFloripa, isMock } = useContext(AppContext);
 
-    // Filtros unificados
+    // Filtros unificados do Scope
     const filterByTerritory = (mun) => {
         const isF = isFloripa(mun);
         if (territoryScope === 'CAPITAL') return isF;
         if (territoryScope === 'INTERIOR') return !isF;
-        // ALL
         if (isF && !includeFloripa) return false;
         return true;
     };
@@ -533,49 +494,43 @@ const Dashboard = () => {
         return true;
     }), [contatos, globalFilters, territoryScope, includeFloripa]);
 
-    // Estatísticas Globais (Votos Evolução)
+    // Estatísticas Globais de Votos (2018 vs 2022 ou 2022 vs 2024)
     const statsVotos = useMemo(() => {
-        let v18SC = 0, v22SC = 0, v22Cap = 0, v24Cap = 0;
+        let vAntigo = 0, vNovo = 0;
         
         if (territoryScope !== 'CAPITAL') {
             estado.forEach(e => {
                 if (isFloripa(e.Cidade) && !includeFloripa) return;
-                v18SC += getVotosValue(e, 2018);
-                v22SC += getVotosValue(e, 2022);
+                vAntigo += getVotosValue(e, 2018);
+                vNovo += getVotosValue(e, 2022);
             });
         }
         
         if (territoryScope === 'CAPITAL' || (territoryScope === 'ALL' && includeFloripa)) {
             capital.forEach(c => {
-                v22Cap += getVotosValue(c, 2022);
-                v24Cap += getVotosValue(c, 2024);
+                // Se estamos olhando o Estado + Floripa, o vAntigo deve ser 2018 de Floripa também, mas a aba capital não tem 2018 mapeado no schema.
+                // Como regra, se for capital explícito, é 22 e 24.
+                if (territoryScope === 'CAPITAL') {
+                    vAntigo += getVotosValue(c, 2022);
+                    vNovo += getVotosValue(c, 2024);
+                } else {
+                    // Para o somatório Global, a força de 22 de floripa se soma ao 'novo'
+                    vNovo += getVotosValue(c, 2022);
+                }
             });
         }
-
-        return { v18SC, v22SC, v22Cap, v24Cap };
+        return { vAntigo, vNovo, lblAntigo: territoryScope === 'CAPITAL' ? '2022' : '2018', lblNovo: territoryScope === 'CAPITAL' ? '2024' : '2022' };
     }, [estado, capital, territoryScope, includeFloripa]);
 
-    const stats = {
-        leads: filteredLeads.length,
-        contatos: filteredContatos.length,
-        emendasCount: filteredEmendas.length,
-        emendasValor: filteredEmendas.reduce((acc, curr) => acc + curr.total, 0),
-        agendas: filteredAgenda.length
-    };
-
-    // Cruzamentos com filtro de inválidos
+    // Preparar Gráficos e Contagem de Inválidos
     const crossChartTemasLeads = useMemo(() => {
         const map = {}; let invalid = 0;
-        
-        // Contagem de Leads
         filteredLeads.forEach(l => {
             const t = l.tema;
             if (isInvalidData(t)) { invalid++; return; }
             if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
             map[t].leads += 1;
         });
-
-        // Contagem de Contatos (Lideranças)
         filteredContatos.forEach(c => {
             const t = c.tema;
             if (isInvalidData(t)) { invalid++; return; }
@@ -586,10 +541,11 @@ const Dashboard = () => {
         return { 
             data: Object.entries(map).map(([name, counts]) => ({ 
                 name, 
-                total: counts.liderancas + counts.leads,
+                value: 0, // placeholder, not used in stacked
+                visualTotal: (counts.liderancas * 10) + counts.leads, // Multiplicador Estratégico 10x
                 segments: [
-                    { value: counts.liderancas, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
-                    { value: counts.leads, colorClass: 'bg-black', label: 'Leads' }
+                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
+                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
                 ]
             })), 
             invalid 
@@ -602,21 +558,17 @@ const Dashboard = () => {
             const t = e.tema;
             if (isInvalidData(t)) invalid += e.total; else map[t] = (map[t] || 0) + e.total; 
         });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value })), invalid };
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
     }, [filteredEmendas]);
 
     const crossChartArticuladores = useMemo(() => {
         const map = {}; let invalid = 0;
         [...filteredAgenda, ...filteredEmendas, ...filteredContatos].forEach(item => {
             const a = item.articulador;
-            if (isInvalidData(a)) {
-                invalid++;
-            } else {
-                if(!map[a]) map[a] = 0;
-                map[a] += 1;
-            }
+            if (isInvalidData(a)) invalid++; 
+            else map[a] = (map[a] || 0) + 1;
         });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value })), invalid };
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
     }, [filteredAgenda, filteredEmendas, filteredContatos]);
 
     const crossChartLocais = useMemo(() => {
@@ -625,7 +577,7 @@ const Dashboard = () => {
             const loc = territoryScope === 'CAPITAL' ? item.bairro || item.municipio_bairro : item.municipio || item.municipio_bairro;
             if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
         });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value })), invalid };
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
     }, [filteredLeads, filteredContatos, territoryScope]);
 
     return (
@@ -636,98 +588,71 @@ const Dashboard = () => {
                 </div>
             )}
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {territoryScope !== 'CAPITAL' && (
-                    <div className="bg-[#EAA221] text-black border-4 border-black p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-black/70 mb-4 block">Evolução de Votos (SC)</span>
-                        <div className="flex items-end gap-6">
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold opacity-80">2018</span>
-                                <span className="text-3xl font-black">{statsVotos.v18SC.toLocaleString()}</span>
-                            </div>
-                            <div className="text-xl font-black opacity-50 mb-1">&rarr;</div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-black bg-black text-[#EAA221] px-1 w-fit">2022</span>
-                                <span className="text-5xl font-black">{statsVotos.v22SC.toLocaleString()}</span>
-                            </div>
-                        </div>
+            <div className={`text-white border-4 border-black p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col ${territoryScope === 'CAPITAL' ? 'bg-[#007D8A]' : 'bg-[#EAA221] text-black'}`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-4 ${territoryScope === 'CAPITAL' ? 'text-white/70' : 'text-black/70'}`}>Evolução de Votos ({territoryScope === 'CAPITAL' ? 'Capital' : 'SC'})</span>
+                <div className="flex items-end gap-6">
+                    <div className="flex flex-col">
+                        <span className="text-sm font-bold opacity-80">{statsVotos.lblAntigo}</span>
+                        <span className="text-3xl font-black">{statsVotos.vAntigo.toLocaleString()}</span>
                     </div>
-                )}
-                {(territoryScope === 'CAPITAL' || (territoryScope === 'ALL' && includeFloripa)) && (
-                    <div className="bg-[#007D8A] text-white border-4 border-black p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-4 block">Evolução de Votos (Capital)</span>
-                        <div className="flex items-end gap-6">
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold opacity-80">2022</span>
-                                <span className="text-3xl font-black">{statsVotos.v22Cap.toLocaleString()}</span>
-                            </div>
-                            <div className="text-xl font-black opacity-50 mb-1">&rarr;</div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-black bg-white text-[#007D8A] px-1 w-fit">2024</span>
-                                <span className="text-5xl font-black">{statsVotos.v24Cap.toLocaleString()}</span>
-                            </div>
-                        </div>
+                    <div className="text-xl font-black opacity-50 mb-1">&rarr;</div>
+                    <div className="flex flex-col">
+                        <span className={`text-sm font-black px-1 w-fit ${territoryScope === 'CAPITAL' ? 'bg-white text-[#007D8A]' : 'bg-black text-[#EAA221]'}`}>{statsVotos.lblNovo}</span>
+                        <span className="text-5xl font-black">{statsVotos.vNovo.toLocaleString()}</span>
                     </div>
-                )}
+                </div>
             </div>
             
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
                     <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Briefcase /><span className="ml-2">Lideranças (CRM)</span></h3>
-                    <div className="text-4xl font-black text-[#C1272D]">{stats.contatos}</div>
+                    <div className="text-4xl font-black text-[#C1272D]">{filteredContatos.length}</div>
                     <div className="h-2 w-full bg-black mt-2 border border-black"></div>
                 </div>
                 <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
                     <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Users /><span className="ml-2">Leads (Eventos)</span></h3>
-                    <div className="text-4xl font-black">{stats.leads}</div>
+                    <div className="text-4xl font-black">{filteredLeads.length}</div>
                     <div className="h-2 w-full bg-[#007D8A] mt-2 border border-black"></div>
                 </div>
                 <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
                     <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.FileText /><span className="ml-2">Emendas</span></h3>
-                    <div className="text-xl sm:text-2xl font-black truncate">{formatCurrency(stats.emendasValor)}</div>
-                    <div className="text-[10px] font-bold mt-1 text-gray-400 uppercase">{stats.emendasCount} Ocorrências</div>
+                    <div className="text-xl sm:text-2xl font-black truncate">{formatCurrency(filteredEmendas.reduce((acc, curr) => acc + curr.total, 0))}</div>
+                    <div className="text-[10px] font-bold mt-1 text-gray-400 uppercase">{filteredEmendas.length} Ocorrências</div>
                     <div className="h-2 w-full bg-[#EAA221] mt-2 border border-black"></div>
                 </div>
                 <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-2">Agendas Realizadas</span></h3>
-                    <div className="text-4xl font-black">{stats.agendas}</div>
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-2">Agendas (Realizadas)</span></h3>
+                    <div className="text-4xl font-black">{filteredAgenda.length}</div>
                     <div className="h-2 w-full bg-[#C1272D] mt-2 border border-black"></div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-                <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col">
-                    <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-4">Engajamento vs Investimento (Temas)</h3>
-                    <div className="flex-1 space-y-6">
-                        <div>
-                            <div className="flex justify-between items-end mb-2">
-                                <p className="text-[10px] font-black text-gray-500 uppercase">Por Volume de Contatos</p>
-                                <div className="flex gap-2 text-[9px] font-black uppercase">
-                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-[#C1272D] border border-black"></div> Lideranças</span>
-                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-black border border-black"></div> Leads</span>
-                                </div>
-                            </div>
-                            <SortableBarChart data={crossChartTemasLeads.data} isStacked={true} maxItems={4} invalidValue={crossChartTemasLeads.invalid} invalidLabel="S/ Tema Definido" />
+                <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[800px]">
+                    <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Engajamento vs Investimento</h3>
+                    <div className="flex-1 space-y-6 overflow-hidden flex flex-col">
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            <p className="text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume de Lideranças + Leads</p>
+                            <SortableBarChart data={crossChartTemasLeads.data} isStacked={true} invalidValue={crossChartTemasLeads.invalid} />
                         </div>
-                        <div className="border-t-2 border-dashed border-gray-300 pt-4">
-                            <p className="text-[10px] font-black text-gray-500 uppercase mb-2">Por R$ Destinado (Emendas)</p>
-                            <SortableBarChart data={crossChartTemasEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} maxItems={4} invalidValue={crossChartTemasEmendas.invalid} invalidLabel="S/ Tema Definido" />
+                        <div className="border-t-2 border-dashed border-gray-300 pt-4 flex-1 flex flex-col overflow-hidden">
+                            <p className="text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por R$ Destinado (Emendas)</p>
+                            <SortableBarChart data={crossChartTemasEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} invalidValue={crossChartTemasEmendas.invalid} />
                         </div>
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-8">
-                    <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-full">
-                        <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2">Performance Articuladores</h3>
-                        <p className="text-[10px] font-bold text-gray-400 mb-4 uppercase">Volume Agendas + Emendas + Lideranças</p>
-                        <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-[#C1272D]" maxItems={4} invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" />
+                <div className="flex flex-col gap-8 max-h-[800px]">
+                    <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden">
+                        <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Performance Articuladores</h3>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Agendas + Emendas + Lideranças</p>
+                        <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-[#C1272D]" invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" />
                     </div>
 
-                    <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-full">
-                        <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2">
-                            Top Locais (Lideranças + Leads)
-                        </h3>
-                        <SortableBarChart data={crossChartLocais.data} colorClass="bg-[#007D8A]" maxItems={4} invalidValue={crossChartLocais.invalid} invalidLabel="Local Não Informado" />
+                    <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden">
+                        <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Top Locais</h3>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Lideranças + Leads</p>
+                        <SortableBarChart data={crossChartLocais.data} colorClass="bg-[#007D8A]" invalidValue={crossChartLocais.invalid} invalidLabel="Local Não Informado" />
                     </div>
                 </div>
             </div>
@@ -761,7 +686,7 @@ const ListaMunicipios = () => {
     return (
         <div className="space-y-6 animate-fade-in w-full max-w-6xl mx-auto pb-12">
             <div className="bg-white border-4 border-black shadow-[6px_6px_0px_0px_#111111] overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead className="bg-[#111111] text-white border-b-4 border-black text-xs uppercase">
                         <tr>
                             <ThSortable label="Município" sortKey="municipio" currentSort={sortConfig} onSort={requestSort} widthClass="w-1/4" />
@@ -775,9 +700,9 @@ const ListaMunicipios = () => {
                     </thead>
                     <tbody>
                         {items.map((m, i) => (
-                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#EAA221]/20 cursor-pointer transition-colors">
-                                <td onClick={() => setSelectedEntity({ type: 'municipio', name: m.municipio })} className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase hover:underline">{m.municipio}</td>
-                                <td onClick={() => setSelectedEntity({ type: 'regiao', name: m.regiao })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase hover:underline">{m.regiao}</td>
+                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#EAA221]/20 transition-colors">
+                                <td onClick={() => setSelectedEntity({ type: 'municipio', name: m.municipio })} className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase cursor-pointer hover:underline text-[#111]">{m.municipio}</td>
+                                <td onClick={() => setSelectedEntity({ type: 'regiao', name: m.regiao })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase cursor-pointer hover:underline">{m.regiao}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-bold text-gray-400 text-right">{m.votos18.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-[#C1272D] text-right">{m.votos22.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-center">{m.numContatos}</td>
@@ -827,7 +752,7 @@ const ListaCapital = () => {
     return (
         <div className="space-y-6 animate-fade-in w-full max-w-6xl mx-auto pb-12">
             <div className="bg-white border-4 border-black shadow-[6px_6px_0px_0px_#111111] overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead className="bg-[#111111] text-white border-b-4 border-black text-xs uppercase">
                         <tr>
                             <ThSortable label="Bairro" sortKey="bairro" currentSort={sortConfig} onSort={requestSort} widthClass="w-1/4" />
@@ -841,10 +766,10 @@ const ListaCapital = () => {
                     </thead>
                     <tbody>
                         {items.map((b, i) => (
-                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#007D8A]/20 cursor-pointer transition-colors">
-                                <td onClick={() => setSelectedEntity({ type: 'bairro', name: b.bairro })} className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase hover:underline">{b.bairro}</td>
-                                <td onClick={() => setSelectedEntity({ type: 'distrito', name: b.distrito })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase hover:underline">{b.distrito}</td>
-                                <td onClick={() => setSelectedEntity({ type: 'regiao', name: b.regiao })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase hover:underline">{b.regiao}</td>
+                            <tr key={i} className="border-b-2 border-gray-200 hover:bg-[#007D8A]/20 transition-colors">
+                                <td onClick={() => setSelectedEntity({ type: 'bairro', name: b.bairro })} className="px-4 py-3 border-r-2 border-gray-200 font-black text-sm uppercase cursor-pointer hover:underline text-[#111]">{b.bairro}</td>
+                                <td onClick={() => setSelectedEntity({ type: 'distrito', name: b.distrito })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase cursor-pointer hover:underline">{b.distrito}</td>
+                                <td onClick={() => setSelectedEntity({ type: 'regiao', name: b.regiao })} className="px-4 py-3 border-r-2 border-gray-200 text-[10px] font-bold text-gray-500 uppercase cursor-pointer hover:underline">{b.regiao}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-bold text-gray-400 text-right">{b.votos22.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-[#007D8A] text-right">{b.votos24.toLocaleString()}</td>
                                 <td className="px-4 py-3 border-r-2 border-gray-200 font-black text-center">{b.numContatos}</td>
@@ -866,7 +791,6 @@ const FichaCompleta = () => {
         const n = normalizeStr(name);
         
         let relLeads = [], relContatos = [], relEmendas = [], relAgendas = [], relVotos = null;
-
         const matchStr = (val) => normalizeStr(val) === n;
 
         if (type === 'municipio') {
@@ -898,8 +822,8 @@ const FichaCompleta = () => {
             relContatos = contatos.filter(c => matchStr(c.distrito));
             const vArr = capital.filter(r => matchStr(r['Distrito']));
             if (vArr.length > 0) {
-                const tot22 = vArr.reduce((acc, curr) => acc + parseVotos(curr['Votos 2022']), 0);
-                const tot24 = vArr.reduce((acc, curr) => acc + parseVotos(curr['Votos 2024']), 0);
+                const tot22 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2022), 0);
+                const tot24 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2024), 0);
                 relVotos = { type: 'Capital (Distrito)', vAntigo: tot22, vNovo: tot24, labelA: '2022', labelN: '2024', regiao: vArr[0]['Região'] };
             }
         }
@@ -916,10 +840,7 @@ const FichaCompleta = () => {
 
     return (
         <div className="space-y-6 w-full max-w-6xl mx-auto pb-12 animate-fade-in">
-            <button 
-                onClick={() => setSelectedEntity(null)} 
-                className="bg-black text-white px-4 py-2 font-black uppercase text-[10px] border-4 border-black hover:bg-gray-800 flex items-center w-fit shadow-[4px_4px_0_0_rgba(17,17,17,1)] active:translate-y-1 active:shadow-none"
-            >
+            <button onClick={() => setSelectedEntity(null)} className="bg-black text-white px-4 py-2 font-black uppercase text-[10px] border-4 border-black hover:bg-gray-800 flex items-center w-fit shadow-[4px_4px_0_0_rgba(17,17,17,1)] active:translate-y-1 active:shadow-none">
                 &larr; Voltar
             </button>
 
@@ -953,14 +874,12 @@ const FichaCompleta = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                
-                {/* Lideranças CRM (NOVO) */}
                 <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col lg:col-span-2">
                     <div className="p-4 bg-[#C1272D] text-white border-b-4 border-black flex justify-between items-center">
                         <h3 className="font-black uppercase flex items-center"><Icons.Briefcase/><span className="ml-2">Lideranças Estratégicas (CRM)</span></h3>
                         <span className="font-black text-sm bg-black border-2 border-white px-2">{entityData.contatos.length}</span>
                     </div>
-                    <div className="overflow-y-auto max-h-[350px]">
+                    <div className="overflow-y-auto max-h-[350px] custom-scrollbar">
                         {entityData.contatos.length > 0 ? (
                             <table className="w-full text-left text-xs">
                                 <tbody>
@@ -968,7 +887,7 @@ const FichaCompleta = () => {
                                         <tr key={i} className="border-b-2 border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => setSelectedEntity({type: 'articulador', name: c.articulador})}>
                                             <td className="p-3">
                                                 <div className="font-black uppercase leading-tight">{c.nome}</div>
-                                                <div className="text-[9px] font-bold text-gray-500 uppercase mt-1 truncate">Articulador: <span className="text-black hover:underline">{c.articulador || '-'}</span></div>
+                                                <div className="text-[9px] font-bold text-gray-500 uppercase mt-1 truncate">Artic: <span className="text-black hover:underline">{c.articulador || '-'}</span></div>
                                             </td>
                                             <td className="p-3 text-right">
                                                 <span className="bg-gray-200 px-2 border border-black text-[9px] font-black uppercase inline-block max-w-[120px] truncate">{c.situacao || 'S/ Status'}</span>
@@ -978,17 +897,16 @@ const FichaCompleta = () => {
                                     ))}
                                 </tbody>
                             </table>
-                        ) : <div className="p-6 text-center text-gray-400 font-bold uppercase text-xs">Nenhum contato estratégico.</div>}
+                        ) : <div className="p-6 text-center text-gray-400 font-bold uppercase text-xs">Sem lideranças mapeadas.</div>}
                     </div>
                 </div>
 
-                {/* Emendas */}
                 <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col lg:col-span-2">
                     <div className="p-4 bg-[#EAA221] border-b-4 border-black flex justify-between items-center">
                         <h3 className="font-black uppercase flex items-center"><Icons.FileText/><span className="ml-2">Emendas (Total: {formatCurrency(valTotal)})</span></h3>
                         <span className="font-black text-sm bg-white border-2 border-black px-2">{entityData.emendas.length}</span>
                     </div>
-                    <div className="overflow-y-auto max-h-[350px] p-2 space-y-2">
+                    <div className="overflow-y-auto max-h-[350px] p-2 space-y-2 custom-scrollbar">
                         {entityData.emendas.length > 0 ? entityData.emendas.map((e, i) => (
                             <div key={i} className="border-2 border-black p-2 bg-white">
                                 <div className="font-black text-sm uppercase leading-tight mb-1 line-clamp-2">{e.objeto}</div>
@@ -1001,13 +919,12 @@ const FichaCompleta = () => {
                     </div>
                 </div>
 
-                {/* Agendas */}
                 <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col lg:col-span-2">
                     <div className="p-4 bg-[#007D8A] text-white border-b-4 border-black flex justify-between items-center">
                         <h3 className="font-black uppercase flex items-center"><Icons.Calendar/><span className="ml-2">Agendas Realizadas</span></h3>
                         <span className="font-black text-sm bg-black border-2 border-white px-2">{entityData.agendas.length}</span>
                     </div>
-                    <div className="overflow-y-auto max-h-[300px] p-2 space-y-2">
+                    <div className="overflow-y-auto max-h-[300px] p-2 space-y-2 custom-scrollbar">
                         {entityData.agendas.length > 0 ? entityData.agendas.map((a, i) => (
                             <div key={i} className="border-2 border-black p-2 bg-white flex flex-col">
                                 <div className="font-black text-xs uppercase leading-tight mb-1 line-clamp-2">{a.titulo}</div>
@@ -1017,13 +934,12 @@ const FichaCompleta = () => {
                     </div>
                 </div>
 
-                {/* Leads Base */}
                 <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col lg:col-span-2">
                     <div className="p-4 bg-black text-white border-b-4 border-black flex justify-between items-center">
-                        <h3 className="font-black uppercase flex items-center"><Icons.Users/><span className="ml-2">Leads (Eventos Antigos)</span></h3>
+                        <h3 className="font-black uppercase flex items-center"><Icons.Users/><span className="ml-2">Leads (Eventos)</span></h3>
                         <span className="font-black text-sm bg-white text-black border-2 border-black px-2">{entityData.leads.length}</span>
                     </div>
-                    <div className="overflow-y-auto max-h-[300px] p-2 space-y-2">
+                    <div className="overflow-y-auto max-h-[300px] p-2 space-y-2 custom-scrollbar">
                         {entityData.leads.length > 0 ? entityData.leads.map((l, i) => (
                             <div key={i} className="border-b-2 border-gray-200 pb-2 mb-2 last:border-0 last:mb-0 last:pb-0 pl-2">
                                 <div className="font-black text-xs uppercase leading-tight truncate">{l.nome}</div>
