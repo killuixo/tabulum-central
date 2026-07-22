@@ -34,6 +34,19 @@ const parseVotos = (val) => {
     return isNaN(parsed) ? 0 : parsed;
 };
 
+// Busca inteligente da coluna de votos pelo ano
+const getVotosValue = (obj, ano) => {
+    if (!obj) return 0;
+    if (obj[`Votos ${ano}`] !== undefined) return parseVotos(obj[`Votos ${ano}`]);
+    for (const key in obj) {
+        const k = String(key).toLowerCase();
+        if (k.includes(String(ano)) && (k.includes('voto') || k.includes('marquito') || k.includes('total')) && !k.includes('%') && !k.includes('validos') && !k.includes('válidos')) {
+            return parseVotos(obj[key]);
+        }
+    }
+    return 0;
+};
+
 const normalizeStr = (str) => {
     if (!str) return '';
     return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -121,7 +134,24 @@ const AppProvider = ({ children }) => {
                 let contatosRaw = await fetchJSON(URL_CONTATOS) || [];
 
                 setLoadingInfo({ isLoading: true, stage: 'Cruzando Dados Eleitorais (5/5)...', progress: 95 });
-                let dadosGerais = await fetchJSON(URL_DADOS_GERAIS) || { estado: [], capital: [] };
+                let dadosGeraisRaw = await fetchJSON(URL_DADOS_GERAIS) || { estado: [], capital: [] };
+
+                // O Apps Script retorna um Array de Arrays. Precisamos converter para Array de Objetos mapeando os cabeçalhos.
+                const transform2D = (arr) => {
+                    if (!Array.isArray(arr) || arr.length < 2) return arr || [];
+                    if (!Array.isArray(arr[0])) return arr; // Se já for Array de Objetos, ignora
+                    const headers = arr[0];
+                    return arr.slice(1).map(row => {
+                        const obj = {};
+                        headers.forEach((h, i) => { if (h) obj[String(h).trim()] = row[i]; });
+                        return obj;
+                    });
+                };
+
+                let dadosGerais = {
+                    estado: transform2D(dadosGeraisRaw.estado),
+                    capital: transform2D(dadosGeraisRaw.capital)
+                };
 
                 // Mock Fallback para prévia no chat
                 if (leadsRaw.length === 0 && emendasRaw.length === 0 && dadosGerais.estado.length === 0) {
@@ -237,7 +267,7 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, maxItem
         }).slice(0, maxItems);
     }, [validData, sortDesc, maxItems, isStacked]);
 
-    const maxVal = sortedData.length > 0 ? (isStacked ? sortedData[0].total : sortedData[0].value) : 1;
+    const maxVal = validData.length > 0 ? Math.max(...validData.map(d => isStacked ? d.total : d.value)) : 1;
 
     return (
         <div className="flex flex-col h-full">
@@ -510,15 +540,15 @@ const Dashboard = () => {
         if (territoryScope !== 'CAPITAL') {
             estado.forEach(e => {
                 if (isFloripa(e.Cidade) && !includeFloripa) return;
-                v18SC += parseVotos(e['Votos 2018']);
-                v22SC += parseVotos(e['Votos 2022']);
+                v18SC += getVotosValue(e, 2018);
+                v22SC += getVotosValue(e, 2022);
             });
         }
         
         if (territoryScope === 'CAPITAL' || (territoryScope === 'ALL' && includeFloripa)) {
             capital.forEach(c => {
-                v22Cap += parseVotos(c['Votos 2022']);
-                v24Cap += parseVotos(c['Votos 2024']);
+                v22Cap += getVotosValue(c, 2022);
+                v24Cap += getVotosValue(c, 2024);
             });
         }
 
@@ -714,8 +744,8 @@ const ListaMunicipios = () => {
         return Array.from(munisSet).map(mun => {
             if (isFloripa(mun) && !includeFloripa) return null;
             const rowEstado = estado.find(e => normalizeStr(e.Cidade) === normalizeStr(mun)) || {};
-            const votos18 = parseVotos(rowEstado['Votos 2018']);
-            const votos22 = parseVotos(rowEstado['Votos 2022']);
+            const votos18 = getVotosValue(rowEstado, 2018);
+            const votos22 = getVotosValue(rowEstado, 2022);
             const regiao = rowEstado['Região do Estado'] || '-';
             
             const volEmendas = emendas.filter(e => normalizeStr(e.municipio) === normalizeStr(mun)).reduce((acc, curr) => acc + curr.total, 0);
@@ -772,8 +802,8 @@ const ListaCapital = () => {
             const b = normalizeStr(c.Bairro);
             if (isInvalidData(b)) return;
             if (!bairrosMap[b]) bairrosMap[b] = { bairro: c.Bairro, distrito: c.Distrito || '-', regiao: c.Região || '-', votos22: 0, votos24: 0, numContatos: 0, numLeads: 0 };
-            bairrosMap[b].votos22 += parseVotos(c['Votos 2022']);
-            bairrosMap[b].votos24 += parseVotos(c['Votos 2024']);
+            bairrosMap[b].votos22 += getVotosValue(c, 2022);
+            bairrosMap[b].votos24 += getVotosValue(c, 2024);
         });
 
         contatos.filter(c => c.base.includes('Florianópolis')).forEach(c => {
@@ -846,7 +876,7 @@ const FichaCompleta = () => {
             relAgendas = agenda.filter(a => matchStr(a.municipio));
             
             const v = estado.find(r => matchStr(r['Cidade']));
-            if (v) relVotos = { type: 'Estado (SC)', vAntigo: parseVotos(v['Votos 2018']), vNovo: parseVotos(v['Votos 2022']), labelA: '2018', labelN: '2022', regiao: v['Região do Estado'] };
+            if (v) relVotos = { type: 'Estado (SC)', vAntigo: getVotosValue(v, 2018), vNovo: getVotosValue(v, 2022), labelA: '2018', labelN: '2022', regiao: v['Região do Estado'] };
         } 
         else if (type === 'bairro') {
             relLeads = leads.filter(l => isFloripa(l.municipio) && matchStr(l.bairro));
@@ -855,8 +885,8 @@ const FichaCompleta = () => {
             
             const vArr = capital.filter(r => matchStr(r['Bairro']));
             if (vArr.length > 0) {
-                const tot22 = vArr.reduce((acc, curr) => acc + parseVotos(curr['Votos 2022']), 0);
-                const tot24 = vArr.reduce((acc, curr) => acc + parseVotos(curr['Votos 2024']), 0);
+                const tot22 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2022), 0);
+                const tot24 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2024), 0);
                 relVotos = { type: 'Capital (Bairro)', vAntigo: tot22, vNovo: tot24, labelA: '2022', labelN: '2024', regiao: vArr[0]['Região'] };
             }
         }
