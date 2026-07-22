@@ -4,7 +4,6 @@ const getEnv = (key) => {
     try { return import.meta.env[key]; } catch(e) { return ''; }
 };
 
-// URLs das 5 bases de dados
 const URL_LEADS = getEnv('VITE_LEADS_URL');
 const URL_EMENDAS = getEnv('VITE_EMENDAS_URL');
 const URL_AGENDA = getEnv('VITE_AGENDA_URL');
@@ -21,34 +20,20 @@ const parseCurrency = (val) => {
     return isNaN(num) ? 0 : num;
 };
 
-// Parse rigoroso e seguro para extrair números de Votos
-const parseVotos = (val) => {
-    if (!val && val !== 0) return 0;
+// Conversor Matemático Rigoroso (Remove pontos, espaços, formatações)
+const parseNumberStrict = (val) => {
+    if (val === null || val === undefined) return 0;
     if (typeof val === 'number') return val;
     let str = String(val).trim();
     if (str === '-' || str === '') return 0;
     str = str.replace(/[R$\s]/g, '');
-    if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.');
-    else if (/\.\d{3}$/.test(str) || str.split('.').length > 2) str = str.replace(/\./g, '');
+    if (str.includes(',')) {
+        str = str.replace(/\./g, '').replace(',', '.');
+    } else if (/\.\d{3}$/.test(str) || str.split('.').length > 2) {
+        str = str.replace(/\./g, '');
+    }
     const parsed = parseFloat(str);
     return isNaN(parsed) ? 0 : parsed;
-};
-
-// Busca fuzzy pelos valores de votos de anos específicos, ignorando porcentagens
-const getVotosValue = (obj, ano) => {
-    if (!obj) return 0;
-    const exato = obj[`Votos ${ano}`] || obj[`votos ${ano}`] || obj[`VOTOS ${ano}`];
-    if (exato !== undefined) return parseVotos(exato);
-
-    for (const key in obj) {
-        const k = String(key).toLowerCase();
-        if (k.includes(String(ano)) && (k.includes('voto') || k.includes('marquito') || k.includes('total'))) {
-            if (!k.includes('%') && !k.includes('validos') && !k.includes('válidos') && !k.includes('proporcao')) {
-                return parseVotos(obj[key]);
-            }
-        }
-    }
-    return 0;
 };
 
 const normalizeStr = (str) => {
@@ -62,14 +47,13 @@ const isFloripa = (str) => {
     return s.includes('florianopolis') || s.includes('floripa');
 };
 
-// Filtro implacável de dados vazios ou não definidos
+// Extrator de Dados Vazios/Inválidos
 const isInvalidData = (str) => {
     if (!str) return true;
     const s = normalizeStr(str);
-    return s === '' || s === '-' || s === 'outros' || s.includes('nao informado') || s.includes('nao definido') || s.includes('tema nao definido');
+    return s === '' || s === '-' || s.includes('outros') || s.includes('nao informado') || s.includes('nao definido') || s.includes('tema nao definido');
 };
 
-// Extrator semântico de Temas a partir de origens
 const getTemaFromOrigem = (origem) => {
     if (!origem) return "Tema Não Definido";
     const o = String(origem).toLowerCase();
@@ -83,7 +67,31 @@ const getTemaFromOrigem = (origem) => {
     if (/saneamento/.test(o)) return "Cidade e Saneamento";
     if (/saúde/.test(o)) return "Saúde";
     if (/alimentos|cozinha/.test(o)) return "Segurança Alimentar";
-    return "Outros"; // Retorna Outros para ser filtrado pelo isInvalidData no gráfico
+    return "Outros Temas"; 
+};
+
+// Extratores por Índice Fixo (Bypass de Cabeçalhos Dinâmicos)
+const parseRowEstado = (row) => {
+    const isArray = Array.isArray(row);
+    const keys = isArray ? [] : Object.keys(row);
+    return {
+        Cidade: isArray ? row[0] : row[keys[0]] || row['Cidade'],
+        Regiao: isArray ? row[1] : row[keys[1]] || row['Região do Estado'],
+        Votos2018: parseNumberStrict(isArray ? row[2] : row[keys[2]]), // Coluna C
+        Votos2022: parseNumberStrict(isArray ? row[3] : row[keys[3]])  // Coluna D
+    };
+};
+
+const parseRowCapital = (row) => {
+    const isArray = Array.isArray(row);
+    const keys = isArray ? [] : Object.keys(row);
+    return {
+        Bairro: isArray ? row[3] : row[keys[3]] || row['Bairro'],       // Coluna D
+        Distrito: isArray ? row[4] : row[keys[4]] || row['Distrito'],   // Coluna E
+        Regiao: isArray ? row[5] : row[keys[5]] || row['Região'],       // Coluna F
+        Votos2022: parseNumberStrict(isArray ? row[8] : row[keys[8]]),  // Coluna I
+        Votos2024: parseNumberStrict(isArray ? row[11] : row[keys[11]]) // Coluna L
+    };
 };
 
 const Icons = {
@@ -115,7 +123,6 @@ const AppProvider = ({ children }) => {
         const loadData = async () => {
             setLoadingInfo({ isLoading: true, stage: 'Conectando aos servidores...', progress: 10 });
             try {
-                // Fetcher robusto para Google Apps Script com redirecionamento
                 const fetchJSON = async (url) => {
                     if(!url) return null;
                     try {
@@ -123,7 +130,6 @@ const AppProvider = ({ children }) => {
                         if(!res.ok) return null;
                         return await res.json();
                     } catch (e) {
-                        console.warn("Falha no fetch:", e);
                         return null;
                     }
                 };
@@ -143,24 +149,18 @@ const AppProvider = ({ children }) => {
                 setLoadingInfo({ isLoading: true, stage: 'Cruzando Dados Eleitorais (5/5)...', progress: 95 });
                 let dadosGeraisRaw = await fetchJSON(URL_DADOS_GERAIS) || { estado: [], capital: [] };
 
-                // Transformador de Array Bidimensional para Array de Objetos Seguro
-                const transform2D = (arr) => {
-                    if (!Array.isArray(arr) || arr.length < 2) return arr || [];
-                    if (!Array.isArray(arr[0])) return arr; 
-                    const headers = arr[0].map(h => String(h).trim());
-                    return arr.slice(1).map(row => {
-                        const obj = {};
-                        headers.forEach((h, i) => { if (h) obj[h] = row[i]; });
-                        return obj;
-                    });
-                };
+                let dadosGerais = { estado: [], capital: [] };
+                
+                // Mapeamento Estrito dos Dados Gerais (Evitando cabeçalhos confusos)
+                if (dadosGeraisRaw.estado && dadosGeraisRaw.estado.length > 0) {
+                    const arr = Array.isArray(dadosGeraisRaw.estado[0]) ? dadosGeraisRaw.estado.slice(1) : dadosGeraisRaw.estado;
+                    dadosGerais.estado = arr.map(parseRowEstado);
+                }
+                if (dadosGeraisRaw.capital && dadosGeraisRaw.capital.length > 0) {
+                    const arr = Array.isArray(dadosGeraisRaw.capital[0]) ? dadosGeraisRaw.capital.slice(1) : dadosGeraisRaw.capital;
+                    dadosGerais.capital = arr.map(parseRowCapital);
+                }
 
-                let dadosGerais = {
-                    estado: transform2D(dadosGeraisRaw.estado),
-                    capital: transform2D(dadosGeraisRaw.capital)
-                };
-
-                // Fallback para demonstração se a API não estiver conectada
                 if (leadsRaw.length === 0 && emendasRaw.length === 0 && dadosGerais.estado.length === 0) {
                     setIsMock(true);
                     leadsRaw = [{ nome: "João", cidade: "Florianópolis", bairroReplan: "Campeche", origem: "Assinatura Horta" }, { nome: "Maria", cidade: "Lages", origem: "Seminário Agroecologia" }];
@@ -168,8 +168,8 @@ const AppProvider = ({ children }) => {
                     agendaRaw = [{ "Título": "Reunião Comunitária", "Município": "Florianópolis", "Bairro": "Campeche", "Início": new Date().toISOString(), "Articulador": "Ana", "Classe de Atividade": "Comunidade" }];
                     contatosRaw = [{ lideranca: "Assoc. Moradores Campeche", base: "Base Florianópolis", municipio_bairro: "Campeche", regiao: "Sul da Ilha", distrito: "Campeche", situacao: "4 - Comprometido", temas: "Meio Ambiente", articulador: "Ana" }];
                     dadosGerais = {
-                        estado: [{ Cidade: "Lages", "Votos 2018": "800", "Votos 2022": "1500", "Região do Estado": "Serra" }, { Cidade: "Florianópolis", "Votos 2018": "15000", "Votos 2022": "25000", "Região do Estado": "Grande Florianópolis" }],
-                        capital: [{ Bairro: "Campeche", Distrito: "Campeche", Região: "Sul da Ilha", "Votos 2022": "1800", "Votos 2024": "2100" }]
+                        estado: [{ Cidade: "Lages", Regiao: "Serra", Votos2018: 800, Votos2022: 1500 }],
+                        capital: [{ Bairro: "Campeche", Distrito: "Campeche", Regiao: "Sul da Ilha", Votos2022: 1800, Votos2024: 2100 }]
                     };
                 }
 
@@ -213,7 +213,7 @@ const AppProvider = ({ children }) => {
                     articulador: c['articulador'] || c['ARTICULADOR'] || ''
                 })).filter(c => c.nome);
 
-                setData({ leads, emendas, agenda, contatos, estado: dadosGerais.estado || [], capital: dadosGerais.capital || [] });
+                setData({ leads, emendas, agenda, contatos, estado: dadosGerais.estado, capital: dadosGerais.capital });
 
             } catch (err) {
                 console.error(err);
@@ -298,7 +298,7 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, invalid
                 )}
             </div>
 
-            <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 flex justify-between shrink-0">
+            <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 flex flex-wrap justify-between shrink-0 gap-2">
                 {isStacked ? (
                     <span className="text-[8px] font-bold text-gray-400 uppercase">* Nota: Lideranças têm peso visual estratégico 10x maior que Leads.</span>
                 ) : <span></span>}
@@ -425,7 +425,7 @@ const Sidebar = () => {
                             {searchResults.length > 0 && (
                                 <ul className="absolute z-50 w-full mt-2 bg-white border-4 border-black max-h-60 overflow-auto shadow-[4px_4px_0_0_rgba(17,17,17,1)]">
                                     {searchResults.map((res, idx) => (
-                                        <li key={idx} className="px-4 py-3 hover:bg-[#EAA221] cursor-pointer text-xs font-bold uppercase border-b-2 border-black last:border-0" onClick={() => { setSelectedEntity({type: res.type, name: res.name}); setSearchTerm(''); }}>{res.label}</li>
+                                        <li key={idx} className="px-4 py-3 hover:bg-[#EAA221] cursor-pointer text-xs font-bold uppercase border-b-2 border-black last:border-0" onClick={() => { setSelectedEntity({type: res.type, name: res.name}); setSearchTerm(''); setMainView('dashboard'); }}>{res.label}</li>
                                     ))}
                                 </ul>
                             )}
@@ -472,7 +472,6 @@ const Sidebar = () => {
 const Dashboard = () => {
     const { leads, emendas, agenda, contatos, estado, capital, globalFilters, territoryScope, includeFloripa, isMock } = useContext(AppContext);
 
-    // Filtros unificados do Scope
     const filterByTerritory = (mun) => {
         const isF = isFloripa(mun);
         if (territoryScope === 'CAPITAL') return isF;
@@ -494,35 +493,31 @@ const Dashboard = () => {
         return true;
     }), [contatos, globalFilters, territoryScope, includeFloripa]);
 
-    // Estatísticas Globais de Votos (2018 vs 2022 ou 2022 vs 2024)
+    // Estatísticas Globais de Votos Integradas
     const statsVotos = useMemo(() => {
         let vAntigo = 0, vNovo = 0;
         
         if (territoryScope !== 'CAPITAL') {
             estado.forEach(e => {
                 if (isFloripa(e.Cidade) && !includeFloripa) return;
-                vAntigo += getVotosValue(e, 2018);
-                vNovo += getVotosValue(e, 2022);
+                vAntigo += e.Votos2018;
+                vNovo += e.Votos2022;
             });
         }
         
         if (territoryScope === 'CAPITAL' || (territoryScope === 'ALL' && includeFloripa)) {
             capital.forEach(c => {
-                // Se estamos olhando o Estado + Floripa, o vAntigo deve ser 2018 de Floripa também, mas a aba capital não tem 2018 mapeado no schema.
-                // Como regra, se for capital explícito, é 22 e 24.
                 if (territoryScope === 'CAPITAL') {
-                    vAntigo += getVotosValue(c, 2022);
-                    vNovo += getVotosValue(c, 2024);
+                    vAntigo += c.Votos2022;
+                    vNovo += c.Votos2024;
                 } else {
-                    // Para o somatório Global, a força de 22 de floripa se soma ao 'novo'
-                    vNovo += getVotosValue(c, 2022);
+                    vNovo += c.Votos2022; // Para consolidado do Estado, capital 22 = Novo.
                 }
             });
         }
         return { vAntigo, vNovo, lblAntigo: territoryScope === 'CAPITAL' ? '2022' : '2018', lblNovo: territoryScope === 'CAPITAL' ? '2024' : '2022' };
     }, [estado, capital, territoryScope, includeFloripa]);
 
-    // Preparar Gráficos e Contagem de Inválidos
     const crossChartTemasLeads = useMemo(() => {
         const map = {}; let invalid = 0;
         filteredLeads.forEach(l => {
@@ -541,8 +536,8 @@ const Dashboard = () => {
         return { 
             data: Object.entries(map).map(([name, counts]) => ({ 
                 name, 
-                value: 0, // placeholder, not used in stacked
-                visualTotal: (counts.liderancas * 10) + counts.leads, // Multiplicador Estratégico 10x
+                value: 0, 
+                visualTotal: (counts.liderancas * 10) + counts.leads, 
                 segments: [
                     { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
                     { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
@@ -571,14 +566,27 @@ const Dashboard = () => {
         return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
     }, [filteredAgenda, filteredEmendas, filteredContatos]);
 
-    const crossChartLocais = useMemo(() => {
+    const crossChartLocaisEstado = useMemo(() => {
         const map = {}; let invalid = 0;
         [...filteredLeads, ...filteredContatos].forEach(item => {
-            const loc = territoryScope === 'CAPITAL' ? item.bairro || item.municipio_bairro : item.municipio || item.municipio_bairro;
-            if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
+            if (!isFloripa(item.municipio) && !(item.base && item.base.includes('Florianópolis'))) {
+                const loc = item.municipio || item.municipio_bairro;
+                if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
+            }
         });
         return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
-    }, [filteredLeads, filteredContatos, territoryScope]);
+    }, [filteredLeads, filteredContatos]);
+
+    const crossChartLocaisCapital = useMemo(() => {
+        const map = {}; let invalid = 0;
+        [...filteredLeads, ...filteredContatos].forEach(item => {
+            if (isFloripa(item.municipio) || (item.base && item.base.includes('Florianópolis'))) {
+                const loc = item.bairro || item.municipio_bairro;
+                if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
+            }
+        });
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
+    }, [filteredLeads, filteredContatos]);
 
     return (
         <div className="space-y-8 w-full max-w-6xl mx-auto pb-12 animate-fade-in">
@@ -597,7 +605,7 @@ const Dashboard = () => {
                     </div>
                     <div className="text-xl font-black opacity-50 mb-1">&rarr;</div>
                     <div className="flex flex-col">
-                        <span className={`text-sm font-black px-1 w-fit ${territoryScope === 'CAPITAL' ? 'bg-white text-[#007D8A]' : 'bg-black text-[#EAA221]'}`}>{statsVotos.lblNovo}</span>
+                        <span className={`text-sm font-black px-1 w-fit border-2 border-black ${territoryScope === 'CAPITAL' ? 'bg-white text-[#007D8A]' : 'bg-black text-[#EAA221]'}`}>{statsVotos.lblNovo}</span>
                         <span className="text-5xl font-black">{statsVotos.vNovo.toLocaleString()}</span>
                     </div>
                 </div>
@@ -632,7 +640,7 @@ const Dashboard = () => {
                     <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Engajamento vs Investimento</h3>
                     <div className="flex-1 space-y-6 overflow-hidden flex flex-col">
                         <div className="flex-1 flex flex-col overflow-hidden">
-                            <p className="text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume de Lideranças + Leads</p>
+                            <p className="text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume de Contatos</p>
                             <SortableBarChart data={crossChartTemasLeads.data} isStacked={true} invalidValue={crossChartTemasLeads.invalid} />
                         </div>
                         <div className="border-t-2 border-dashed border-gray-300 pt-4 flex-1 flex flex-col overflow-hidden">
@@ -643,17 +651,27 @@ const Dashboard = () => {
                 </div>
 
                 <div className="flex flex-col gap-8 max-h-[800px]">
-                    <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden">
+                    <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
                         <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Performance Articuladores</h3>
                         <p className="text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Agendas + Emendas + Lideranças</p>
                         <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-[#C1272D]" invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" />
                     </div>
 
-                    <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden">
-                        <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Top Locais</h3>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Lideranças + Leads</p>
-                        <SortableBarChart data={crossChartLocais.data} colorClass="bg-[#007D8A]" invalidValue={crossChartLocais.invalid} invalidLabel="Local Não Informado" />
-                    </div>
+                    {(territoryScope === 'ALL' || territoryScope === 'INTERIOR') && (
+                        <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
+                            <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Top Municípios SC</h3>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Lideranças + Leads</p>
+                            <SortableBarChart data={crossChartLocaisEstado.data} colorClass="bg-[#007D8A]" invalidValue={crossChartLocaisEstado.invalid} invalidLabel="Local Não Informado" />
+                        </div>
+                    )}
+
+                    {(territoryScope === 'ALL' || territoryScope === 'CAPITAL') && (
+                        <div className="bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
+                            <h3 className="text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Top Bairros Floripa</h3>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Lideranças + Leads</p>
+                            <SortableBarChart data={crossChartLocaisCapital.data} colorClass="bg-black" invalidValue={crossChartLocaisCapital.invalid} invalidLabel="Local Não Informado" />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -664,21 +682,40 @@ const ListaMunicipios = () => {
     const { estado, emendas, contatos, leads, setSelectedEntity, includeFloripa } = useContext(AppContext);
 
     const dadosAgregados = useMemo(() => {
-        const munisSet = new Set([...estado.map(e=>e.Cidade), ...emendas.map(e=>e.municipio), ...contatos.filter(c=>c.base.includes('Santa Catarina')).map(c=>c.municipio_bairro)].filter(m => !isInvalidData(m)));
+        const munisMap = {};
         
-        return Array.from(munisSet).map(mun => {
-            if (isFloripa(mun) && !includeFloripa) return null;
-            const rowEstado = estado.find(e => normalizeStr(e.Cidade) === normalizeStr(mun)) || {};
-            const votos18 = getVotosValue(rowEstado, 2018);
-            const votos22 = getVotosValue(rowEstado, 2022);
-            const regiao = rowEstado['Região do Estado'] || '-';
-            
-            const volEmendas = emendas.filter(e => normalizeStr(e.municipio) === normalizeStr(mun)).reduce((acc, curr) => acc + curr.total, 0);
-            const numContatos = contatos.filter(c => c.base.includes('Santa Catarina') && normalizeStr(c.municipio_bairro) === normalizeStr(mun)).length;
-            const numLeads = leads.filter(l => normalizeStr(l.municipio) === normalizeStr(mun)).length;
+        estado.forEach(e => {
+            const m = normalizeStr(e.Cidade);
+            if (isInvalidData(m)) return;
+            if (!munisMap[m]) munisMap[m] = { municipio: e.Cidade, regiao: e.Regiao || '-', votos18: 0, votos22: 0, volEmendas: 0, numContatos: 0, numLeads: 0 };
+            munisMap[m].votos18 += e.Votos2018 || 0;
+            munisMap[m].votos22 += e.Votos2022 || 0;
+        });
 
-            return { municipio: mun, regiao, votos18, votos22, volEmendas, numContatos, numLeads };
-        }).filter(Boolean);
+        emendas.forEach(e => {
+            const m = normalizeStr(e.municipio);
+            if (isInvalidData(m)) return;
+            if (!munisMap[m]) munisMap[m] = { municipio: e.municipio, regiao: e.regiao || '-', votos18: 0, votos22: 0, volEmendas: 0, numContatos: 0, numLeads: 0 };
+            munisMap[m].volEmendas += e.total || 0;
+        });
+        
+        contatos.filter(c => c.base.includes('Santa Catarina')).forEach(c => {
+            const m = normalizeStr(c.municipio_bairro);
+            if (isInvalidData(m)) return;
+            if (!munisMap[m]) munisMap[m] = { municipio: c.municipio_bairro, regiao: c.regiao || '-', votos18: 0, votos22: 0, volEmendas: 0, numContatos: 0, numLeads: 0 };
+            munisMap[m].numContatos += 1;
+        });
+
+        leads.filter(l => !isFloripa(l.municipio)).forEach(l => {
+            const m = normalizeStr(l.municipio);
+            if (isInvalidData(m)) return;
+            if (munisMap[m]) munisMap[m].numLeads += 1;
+        });
+
+        return Object.values(munisMap).filter(m => {
+            if (isFloripa(m.municipio) && !includeFloripa) return false;
+            return true;
+        });
     }, [estado, emendas, contatos, leads, includeFloripa]);
 
     const { items, requestSort, sortConfig } = useSortableData(dadosAgregados, { key: 'votos22', direction: 'desc' });
@@ -726,9 +763,9 @@ const ListaCapital = () => {
         capital.forEach(c => {
             const b = normalizeStr(c.Bairro);
             if (isInvalidData(b)) return;
-            if (!bairrosMap[b]) bairrosMap[b] = { bairro: c.Bairro, distrito: c.Distrito || '-', regiao: c.Região || '-', votos22: 0, votos24: 0, numContatos: 0, numLeads: 0 };
-            bairrosMap[b].votos22 += getVotosValue(c, 2022);
-            bairrosMap[b].votos24 += getVotosValue(c, 2024);
+            if (!bairrosMap[b]) bairrosMap[b] = { bairro: c.Bairro, distrito: c.Distrito || '-', regiao: c.Regiao || '-', votos22: 0, votos24: 0, numContatos: 0, numLeads: 0 };
+            bairrosMap[b].votos22 += c.Votos2022 || 0;
+            bairrosMap[b].votos24 += c.Votos2024 || 0;
         });
 
         contatos.filter(c => c.base.includes('Florianópolis')).forEach(c => {
@@ -799,19 +836,19 @@ const FichaCompleta = () => {
             relEmendas = emendas.filter(e => matchStr(e.municipio));
             relAgendas = agenda.filter(a => matchStr(a.municipio));
             
-            const v = estado.find(r => matchStr(r['Cidade']));
-            if (v) relVotos = { type: 'Estado (SC)', vAntigo: getVotosValue(v, 2018), vNovo: getVotosValue(v, 2022), labelA: '2018', labelN: '2022', regiao: v['Região do Estado'] };
+            const v = estado.find(r => matchStr(r.Cidade));
+            if (v) relVotos = { type: 'Estado (SC)', vAntigo: v.Votos2018, vNovo: v.Votos2022, labelA: '2018', labelN: '2022', regiao: v.Regiao };
         } 
         else if (type === 'bairro') {
             relLeads = leads.filter(l => isFloripa(l.municipio) && matchStr(l.bairro));
             relContatos = contatos.filter(c => c.base.includes('Florianópolis') && matchStr(c.municipio_bairro));
             relAgendas = agenda.filter(a => isFloripa(a.municipio) && matchStr(a.bairro));
             
-            const vArr = capital.filter(r => matchStr(r['Bairro']));
+            const vArr = capital.filter(r => matchStr(r.Bairro));
             if (vArr.length > 0) {
-                const tot22 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2022), 0);
-                const tot24 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2024), 0);
-                relVotos = { type: 'Capital (Bairro)', vAntigo: tot22, vNovo: tot24, labelA: '2022', labelN: '2024', regiao: vArr[0]['Região'] };
+                const tot22 = vArr.reduce((acc, curr) => acc + curr.Votos2022, 0);
+                const tot24 = vArr.reduce((acc, curr) => acc + curr.Votos2024, 0);
+                relVotos = { type: 'Capital (Bairro)', vAntigo: tot22, vNovo: tot24, labelA: '2022', labelN: '2024', regiao: vArr[0].Regiao };
             }
         }
         else if (type === 'regiao') {
@@ -820,11 +857,11 @@ const FichaCompleta = () => {
         }
         else if (type === 'distrito') {
             relContatos = contatos.filter(c => matchStr(c.distrito));
-            const vArr = capital.filter(r => matchStr(r['Distrito']));
+            const vArr = capital.filter(r => matchStr(r.Distrito));
             if (vArr.length > 0) {
-                const tot22 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2022), 0);
-                const tot24 = vArr.reduce((acc, curr) => acc + getVotosValue(curr, 2024), 0);
-                relVotos = { type: 'Capital (Distrito)', vAntigo: tot22, vNovo: tot24, labelA: '2022', labelN: '2024', regiao: vArr[0]['Região'] };
+                const tot22 = vArr.reduce((acc, curr) => acc + curr.Votos2022, 0);
+                const tot24 = vArr.reduce((acc, curr) => acc + curr.Votos2024, 0);
+                relVotos = { type: 'Capital (Distrito)', vAntigo: tot22, vNovo: tot24, labelA: '2022', labelN: '2024', regiao: vArr[0].Regiao };
             }
         }
         else if (type === 'articulador') {
