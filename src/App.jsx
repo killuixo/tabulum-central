@@ -402,6 +402,7 @@ const SortableBarChartStacked = ({ data, invalidLabel = 'Não Definidos', invali
 const Sidebar = () => {
     const { emendas, leads, contatos, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, setMainView } = useContext(AppContext);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
     const searchIndex = useMemo(() => {
         const index = [];
@@ -440,13 +441,24 @@ const Sidebar = () => {
     const temas = useMemo(() => [...new Set([...emendas.map(e => e.tema), ...contatos.map(c => c.tema)].filter(t => !isInvalidData(t)))].sort(), [emendas, contatos]);
 
     return (
-        <div className="w-full md:w-80 bg-[#FDFBF7] border-r-4 border-black flex flex-col z-20 flex-shrink-0 h-auto md:h-full">
-            <div className="p-6 border-b-4 border-black bg-[#EAA221] cursor-pointer" onClick={() => {setSelectedEntity(null); setMainView('dashboard');}}>
-                <h1 className="text-3xl font-black text-black tracking-tighter uppercase">TABULUM</h1>
-                <p className="text-[10px] font-black tracking-widest uppercase mt-1">Inteligência Estratégica</p>
+        <div className="w-full md:w-80 bg-[#FDFBF7] border-r-0 md:border-r-4 border-b-4 md:border-b-0 border-black flex flex-col z-20 flex-shrink-0 h-auto md:h-full">
+            <div className="p-4 md:p-6 border-b-4 border-black bg-[#EAA221] flex justify-between items-center">
+                <div className="cursor-pointer flex-1 flex items-center justify-between" onClick={() => {setSelectedEntity(null); setMainView('dashboard'); setIsMobileMenuOpen(false);}}>
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-black text-black tracking-tighter uppercase">TABULUM</h1>
+                        <p className="text-[9px] md:text-[10px] font-black tracking-widest uppercase mt-1">Central de Inteligência</p>
+                    </div>
+                    <img src="https://raw.githubusercontent.com/killuixo/tabulum-central/refs/heads/main/icon-192.png" alt="Ícone TABULUM" className="w-8 h-8 md:w-10 md:h-10 object-contain ml-2 drop-shadow-md" />
+                </div>
+                <button 
+                    className="md:hidden ml-4 p-2 border-2 border-black bg-black text-white font-black text-[10px] uppercase shadow-[2px_2px_0_0_#111] active:translate-y-0.5 active:shadow-none transition-all" 
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                >
+                    {isMobileMenuOpen ? 'Fechar' : 'Filtros'}
+                </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar">
+            <div className={`flex-1 overflow-y-auto flex-col custom-scrollbar ${isMobileMenuOpen ? 'flex' : 'hidden md:flex'}`}>
                 <div className="p-4 border-b-4 border-black bg-white">
                     <label className="text-[10px] font-black uppercase tracking-widest block mb-2 text-[#C1272D] flex items-center">
                         <Icons.MapPin /> <span className="ml-1">Foco Territorial</span>
@@ -564,46 +576,46 @@ const GlobalStats = () => {
 
     return (
         <div className="w-full max-w-6xl mx-auto mb-8 animate-fade-in shrink-0">
-            <div className={`text-white border-4 border-black p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col mb-6 ${territoryScope === 'CAPITAL' ? 'bg-[#007D8A]' : 'bg-[#EAA221] text-black'}`}>
-                <span className={`text-[10px] font-black uppercase tracking-widest block mb-4 ${territoryScope === 'CAPITAL' ? 'text-white/70' : 'text-black/70'}`}>
+            <div className={`text-white border-4 border-black p-4 sm:p-6 shadow-[4px_4px_0px_0px_#111111] sm:shadow-[6px_6px_0px_0px_#111111] flex flex-col mb-6 ${territoryScope === 'CAPITAL' ? 'bg-[#007D8A]' : 'bg-[#EAA221] text-black'}`}>
+                <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block mb-3 sm:mb-4 ${territoryScope === 'CAPITAL' ? 'text-white/70' : 'text-black/70'}`}>
                     Evolução de Votos ({territoryScope === 'CAPITAL' ? 'Capital' : 'SC'})
                     <span className="opacity-50 text-[8px] ml-2">
                         {territoryScope === 'ESTADO' ? (includeFloripa ? '(Incluindo Floripa)' : '(Omitindo Floripa)') : ''}
                     </span>
                 </span>
-                <div className="flex items-end gap-6">
+                <div className="flex flex-wrap items-end gap-3 sm:gap-6">
                     <div className="flex flex-col">
-                        <span className="text-sm font-bold opacity-80">{statsVotos.lblAntigo}</span>
-                        <span className="text-3xl font-black">{statsVotos.vAntigo.toLocaleString()}</span>
+                        <span className="text-xs sm:text-sm font-bold opacity-80">{statsVotos.lblAntigo}</span>
+                        <span className="text-2xl sm:text-3xl font-black">{statsVotos.vAntigo.toLocaleString()}</span>
                     </div>
-                    <div className="text-xl font-black opacity-50 mb-1">&rarr;</div>
+                    <div className="text-lg sm:text-xl font-black opacity-50 mb-1">&rarr;</div>
                     <div className="flex flex-col">
-                        <span className={`text-sm font-black px-1 w-fit border-2 border-black ${territoryScope === 'CAPITAL' ? 'bg-white text-[#007D8A]' : 'bg-black text-[#EAA221]'}`}>{statsVotos.lblNovo}</span>
-                        <span className="text-5xl font-black">{statsVotos.vNovo.toLocaleString()}</span>
+                        <span className={`text-xs sm:text-sm font-black px-1 w-fit border-2 border-black ${territoryScope === 'CAPITAL' ? 'bg-white text-[#007D8A]' : 'bg-black text-[#EAA221]'}`}>{statsVotos.lblNovo}</span>
+                        <span className="text-4xl sm:text-5xl font-black break-all">{statsVotos.vNovo.toLocaleString()}</span>
                     </div>
                 </div>
             </div>
             
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Briefcase /><span className="ml-2">Lideranças (CRM)</span></h3>
-                    <div className="text-4xl font-black text-[#C1272D]">{filteredContatos.length}</div>
+                <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Briefcase /><span className="ml-1 sm:ml-2">Lideranças</span></h3>
+                    <div className="text-3xl sm:text-4xl font-black text-[#C1272D]">{filteredContatos.length}</div>
                     <div className="h-2 w-full bg-black mt-2 border border-black"></div>
                 </div>
-                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Users /><span className="ml-2">Leads (Eventos)</span></h3>
-                    <div className="text-4xl font-black">{filteredLeads.length}</div>
+                <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Users /><span className="ml-1 sm:ml-2">Leads</span></h3>
+                    <div className="text-3xl sm:text-4xl font-black">{filteredLeads.length}</div>
                     <div className="h-2 w-full bg-[#007D8A] mt-2 border border-black"></div>
                 </div>
-                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.FileText /><span className="ml-2">Emendas</span></h3>
-                    <div className="text-xl sm:text-2xl font-black truncate">{formatCurrency(filteredEmendas.reduce((acc, curr) => acc + curr.total, 0))}</div>
-                    <div className="text-[10px] font-bold mt-1 text-gray-400 uppercase">{filteredEmendas.length} Ocorrências</div>
+                <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.FileText /><span className="ml-1 sm:ml-2">Emendas</span></h3>
+                    <div className="text-lg sm:text-xl md:text-2xl font-black truncate break-all" title={formatCurrency(filteredEmendas.reduce((acc, curr) => acc + curr.total, 0))}>{formatCurrency(filteredEmendas.reduce((acc, curr) => acc + curr.total, 0))}</div>
+                    <div className="text-[9px] sm:text-[10px] font-bold mt-1 text-gray-400 uppercase">{filteredEmendas.length} Ocorrências</div>
                     <div className="h-2 w-full bg-[#EAA221] mt-2 border border-black"></div>
                 </div>
-                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-2">Agendas Realizadas</span></h3>
-                    <div className="text-4xl font-black">{filteredAgenda.length}</div>
+                <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-1 sm:ml-2">Agendas</span></h3>
+                    <div className="text-3xl sm:text-4xl font-black">{filteredAgenda.length}</div>
                     <div className="h-2 w-full bg-[#C1272D] mt-2 border border-black"></div>
                 </div>
             </div>
@@ -651,20 +663,20 @@ const InstitutionStats = () => {
 
     return (
         <div className="w-full max-w-6xl mx-auto mb-8 animate-fade-in shrink-0">
-            <div className="text-white border-4 border-black p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col mb-6 bg-[#C1272D]">
-                <span className="text-[10px] font-black uppercase tracking-widest block mb-4 text-white/70">Visão Geral de Entidades / Razão Social</span>
+            <div className="text-white border-4 border-black p-4 sm:p-6 shadow-[4px_4px_0px_0px_#111111] sm:shadow-[6px_6px_0px_0px_#111111] flex flex-col mb-6 bg-[#C1272D]">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest block mb-3 sm:mb-4 text-white/70">Visão Geral de Entidades / Razão Social</span>
                 <div className="flex items-end gap-6">
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold opacity-80">Total Destinado</span>
-                        <span className="text-4xl md:text-5xl font-black">{formatCurrency(stats.totalVal)}</span>
+                    <div className="flex flex-col w-full">
+                        <span className="text-xs sm:text-sm font-bold opacity-80">Total Destinado</span>
+                        <span className="text-3xl sm:text-4xl md:text-5xl font-black break-all">{formatCurrency(stats.totalVal)}</span>
                     </div>
                 </div>
             </div>
             
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Entidades Atendidas</h3>
-                    <div className="text-4xl font-black">{stats.totalCount}</div>
+                <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Entidades Atendidas</h3>
+                    <div className="text-3xl sm:text-4xl font-black">{stats.totalCount}</div>
                     <div className="h-2 w-full bg-black mt-2 border border-black"></div>
                 </div>
                 <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
@@ -1210,27 +1222,27 @@ const FichaCompleta = () => {
                 &larr; Voltar
             </button>
 
-            <div className="bg-white p-8 border-4 border-black shadow-[8px_8px_0_0_rgba(17,17,17,1)] relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-[#111] border-l-4 border-b-4 border-black"></div>
-                <span className="inline-block px-3 py-1 bg-[#EAA221] text-black text-[10px] font-black uppercase tracking-widest border-2 border-black mb-4">
+            <div className="bg-white p-6 sm:p-8 border-4 border-black shadow-[4px_4px_0_0_rgba(17,17,17,1)] sm:shadow-[8px_8px_0_0_rgba(17,17,17,1)] relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-12 h-12 sm:w-16 sm:h-16 bg-[#111] border-l-4 border-b-4 border-black"></div>
+                <span className="inline-block px-3 py-1 bg-[#EAA221] text-black text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-2 border-black mb-3 sm:mb-4">
                     Ficha Analítica: {selectedEntity.type}
                 </span>
-                <h1 className="text-4xl md:text-5xl font-black text-black uppercase tracking-tighter leading-none pr-10">{selectedEntity.name}</h1>
+                <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-black uppercase tracking-tighter leading-tight pr-8 sm:pr-10 break-words">{selectedEntity.name}</h1>
                 
                 {entityData.votos && (
-                    <div className="mt-6 flex flex-wrap gap-6 pt-4 border-t-2 border-dashed border-gray-300">
-                        <div className="flex items-end gap-4">
+                    <div className="mt-4 sm:mt-6 flex flex-wrap gap-4 sm:gap-6 pt-4 border-t-2 border-dashed border-gray-300">
+                        <div className="flex flex-wrap items-end gap-3 sm:gap-4">
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-black uppercase text-gray-500">Votos ({entityData.votos.labelA})</span>
-                                <span className="text-2xl font-bold text-gray-400">{entityData.votos.vAntigo.toLocaleString()}</span>
+                                <span className="text-[9px] sm:text-[10px] font-black uppercase text-gray-500">Votos ({entityData.votos.labelA})</span>
+                                <span className="text-xl sm:text-2xl font-bold text-gray-400">{entityData.votos.vAntigo.toLocaleString()}</span>
                             </div>
                             <div className="text-gray-400 font-bold mb-1">&rarr;</div>
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-black uppercase text-black">Votos ({entityData.votos.labelN})</span>
-                                <span className="text-3xl font-black text-[#C1272D]">{entityData.votos.vNovo.toLocaleString()}</span>
+                                <span className="text-[9px] sm:text-[10px] font-black uppercase text-black">Votos ({entityData.votos.labelN})</span>
+                                <span className="text-2xl sm:text-3xl font-black text-[#C1272D]">{entityData.votos.vNovo.toLocaleString()}</span>
                             </div>
                         </div>
-                        <div className="w-px bg-gray-300 hidden sm:block"></div>
+                        <div className="w-full sm:w-px h-px sm:h-auto bg-gray-300"></div>
                         <div className="flex flex-col justify-end">
                             <span className="text-[10px] font-black uppercase text-gray-500">Classificação Geográfica</span>
                             <span className="text-xl font-black cursor-pointer hover:text-[#C1272D] hover:underline" onClick={() => setSelectedEntity({type: 'regiao', name: entityData.votos.regiao})}>{entityData.votos.regiao || '-'}</span>
