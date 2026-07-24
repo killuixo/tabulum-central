@@ -239,7 +239,10 @@ const AppProvider = ({ children }) => {
             } catch (err) {
                 console.error(err);
             } finally {
-                setLoadingInfo({ isLoading: false, stage: 'Concluído', progress: 100 });
+                setLoadingInfo({ isLoading: true, stage: 'Concluído', progress: 100 });
+                setTimeout(() => {
+                    setLoadingInfo({ isLoading: false, stage: 'Concluído', progress: 100 });
+                }, 2000);
             }
         };
         loadData();
@@ -249,6 +252,65 @@ const AppProvider = ({ children }) => {
         <AppContext.Provider value={{ ...data, loadingInfo, isMock, selectedEntity, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, mainView, setMainView }}>
             {children}
         </AppContext.Provider>
+    );
+};
+
+// Componente Exclusivo de Carregamento com Frases Rotativas
+const LoadingScreen = ({ loadingInfo }) => {
+    const messages = [
+        "Isto pode levar alguns minutos.",
+        "Aguarde, por favor.",
+        "Carregando nova planilha, aguarde.",
+        "Faltam poucos instantes."
+    ];
+    const [msgIndex, setMsgIndex] = useState(0);
+
+    // Rotação de 30 segundos
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setMsgIndex((prev) => (prev + 1) % messages.length);
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [messages.length]);
+
+    // Forçar mensagem de "nova planilha" ao mudar de estágio
+    useEffect(() => {
+        if (loadingInfo.progress > 0 && loadingInfo.progress < 100) {
+            setMsgIndex(2);
+        }
+    }, [loadingInfo.stage]);
+
+    const isDone = loadingInfo.progress === 100 || loadingInfo.stage === 'Concluído';
+
+    return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 z-[9999]">
+            {!isDone ? (
+                <div className="w-16 h-16 border-4 border-[#FDFBF7] border-t-[#C1272D] border-r-[#EAA221] border-b-[#007D8A] rounded-full animate-spin mb-8 shadow-md"></div>
+            ) : (
+                <div className="h-16 mb-8 flex items-center justify-center animate-fade-in">
+                     <img src="https://raw.githubusercontent.com/killuixo/tabulum-central/refs/heads/main/icon-192.png" alt="icon" className="w-16 h-16 object-contain" />
+                </div>
+            )}
+            
+            <div className="w-full max-w-xs bg-white border-4 border-black p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col gap-4 text-center">
+                {isDone ? (
+                    <div className="animate-fade-in">
+                        <h1 className="text-2xl font-black tracking-tighter uppercase leading-none text-black">TABULUM</h1>
+                        <p className="text-sm font-black tracking-widest uppercase text-[#007D8A] mt-2">CONCLUÍDO</p>
+                    </div>
+                ) : (
+                    <>
+                        <p className="text-xs font-black tracking-widest uppercase text-black">{loadingInfo.stage}</p>
+                        <div className="w-full h-3 bg-gray-200 border-2 border-black overflow-hidden">
+                            <div className="h-full bg-black transition-all duration-300 ease-out" style={{ width: `${loadingInfo.progress}%` }}></div>
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase mt-2 animate-fade-in" key={msgIndex}>
+                            {messages[msgIndex]}
+                        </p>
+                    </>
+                )}
+            </div>
+        </div>
     );
 };
 
@@ -1264,7 +1326,7 @@ const GlobalStats = () => {
         }).length;
     }, [targetAgenda]);
 
-    if (isSistema) return null; // Esconde stats se estiver na aba sistema
+    if (isSistema) return null;
 
     if (mainView === 'lista_instituicoes') {
         const totalValue = emendas.reduce((acc, curr) => acc + curr.total, 0);
@@ -1354,20 +1416,10 @@ const GlobalStats = () => {
 const AppContent = () => {
     const { loadingInfo, selectedEntity, mainView, setMainView } = useContext(AppContext);
 
-    if (loadingInfo.isLoading) return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4">
-            <div className="w-16 h-16 border-4 border-[#FDFBF7] border-t-[#C1272D] border-r-[#EAA221] border-b-[#007D8A] rounded-full animate-spin mb-8 shadow-md"></div>
-            <div className="w-full max-w-xs bg-white border-4 border-black p-4 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col gap-3 text-center">
-                <p className="text-xs font-black tracking-widest uppercase text-black">{loadingInfo.stage}</p>
-                <div className="w-full h-3 bg-gray-200 border-2 border-black overflow-hidden">
-                    <div className="h-full bg-black transition-all duration-300 ease-out" style={{ width: `${loadingInfo.progress}%` }}></div>
-                </div>
-            </div>
-        </div>
-    );
-
     return (
-        <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#FDFBF7] text-[#111111] font-sans">
+        <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#FDFBF7] text-[#111111] font-sans relative">
+            {loadingInfo.isLoading && <LoadingScreen loadingInfo={loadingInfo} />}
+            
             <Sidebar />
             <main className="flex-1 flex flex-col overflow-hidden relative">
                 <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#111 1.5px, transparent 1.5px)', backgroundSize: '24px 24px' }}></div>
