@@ -116,9 +116,9 @@ const AppProvider = ({ children }) => {
     const [isMock, setIsMock] = useState(false);
     
     const [selectedEntity, setSelectedEntity] = useState(null); 
-    const [territoryScope, setTerritoryScope] = useState('ALL'); 
+    const [territoryScope, setTerritoryScope] = useState('INTERIOR'); 
     const [includeFloripa, setIncludeFloripa] = useState(false); 
-    const [globalFilters, setGlobalFilters] = useState({ temas: [], regioes: [] });
+    const [globalFilters, setGlobalFilters] = useState({ temas: [], regioes: [], distritos: [] });
     const [mainView, setMainView] = useState('dashboard');
 
     useEffect(() => {
@@ -212,15 +212,26 @@ const AppProvider = ({ children }) => {
                     };
                 }).filter(e => e.numero);
 
-                const agenda = agendaRaw.map((a, i) => ({
-                    id: `a_${i}`,
-                    titulo: a['Título'] || a['titulo'] || '',
-                    municipio: (a['Município'] || a['municipio'] || '').trim(),
-                    bairro: (a['Bairro'] || a['bairro'] || '').trim(),
-                    articulador: (a['Articulador'] || a['articulador'] || '').trim(),
-                    classe: a['Classe de Atividade'] || '',
-                    inicio: a['Início'] || a['inicio'] || null
-                }));
+                const agenda = agendaRaw.map((a, i) => {
+                    let mun = (a['Município'] || a['municipio'] || '').trim();
+                    const bairro = (a['Bairro'] || a['bairro'] || '').trim();
+                    const local = (a['Local'] || '').trim();
+                    
+                    // Fallback para capital
+                    if (!mun && (normalizeStr(bairro).includes('centro') || normalizeStr(local).includes('alesc') || normalizeStr(local).includes('florianopolis'))) {
+                        mun = 'Florianópolis';
+                    }
+
+                    return {
+                        id: `a_${i}`,
+                        titulo: a['Título'] || a['titulo'] || '',
+                        municipio: mun,
+                        bairro: bairro,
+                        articulador: (a['Articulador'] || a['articulador'] || '').trim(),
+                        classe: a['Classe de Atividade'] || '',
+                        inicio: a['Início'] || a['inicio'] || null
+                    };
+                });
 
                 const contatos = contatosRaw.map((c, i) => ({
                     id: `c_${i}`,
@@ -478,7 +489,7 @@ const ThSortable = ({ label, sortKey, currentSort, onSort, widthClass="" }) => {
 };
 
 const Sidebar = () => {
-    const { emendas, leads, contatos, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, mainView, setMainView } = useContext(AppContext);
+    const { emendas, leads, contatos, capital, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, mainView, setMainView } = useContext(AppContext);
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
@@ -512,8 +523,11 @@ const Sidebar = () => {
         return searchIndex.filter(i => i.label.toLowerCase().includes(term)).slice(0, 10);
     }, [searchTerm, searchIndex]);
 
-    const regioes = useMemo(() => [...new Set([...emendas.map(e => e.regiao), ...contatos.map(c => c.regiao)].filter(r => !isInvalidData(r)))].sort(), [emendas, contatos]);
+    const regioesEstado = useMemo(() => [...new Set([...emendas.map(e => e.regiao), ...contatos.map(c => c.regiao)].filter(r => !isInvalidData(r)))].sort(), [emendas, contatos]);
     const temas = useMemo(() => [...new Set([...emendas.map(e => e.tema), ...contatos.map(c => c.tema)].filter(t => !isInvalidData(t)))].sort(), [emendas, contatos]);
+    
+    const regioesFpolis = useMemo(() => [...new Set([...capital.map(c => c.Regiao), ...contatos.filter(c => c.base.includes('Florianópolis')).map(c => c.regiao)].filter(r => !isInvalidData(r)))].sort(), [capital, contatos]);
+    const distritosFpolis = useMemo(() => [...new Set([...capital.map(c => c.Distrito), ...contatos.filter(c => c.base.includes('Florianópolis')).map(c => c.distrito)].filter(d => !isInvalidData(d)))].sort(), [capital, contatos]);
 
     return (
         <>
@@ -578,11 +592,36 @@ const Sidebar = () => {
                                 <Icons.Filter /> <span className="ml-2">Filtros Cruzados</span>
                             </div>
                             <div className="space-y-4">
-                                {territoryScope !== 'CAPITAL' && (
+                                {territoryScope === 'CAPITAL' ? (
+                                    <>
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-gray-500 block mb-2">Regiões da Capital</label>
+                                            <div className="max-h-32 overflow-y-auto border-2 border-black bg-white p-2 space-y-1 custom-scrollbar">
+                                                {regioesFpolis.map(r => (
+                                                    <label key={r} className="flex items-center space-x-2 cursor-pointer p-1.5 hover:bg-gray-100 group">
+                                                        <input type="checkbox" checked={globalFilters.regioes.includes(r)} onChange={() => setGlobalFilters(prev => ({ ...prev, regioes: prev.regioes.includes(r) ? prev.regioes.filter(v => v !== r) : [...prev.regioes, r] }))} className="w-4 h-4 accent-black border-2 border-black" />
+                                                        <span className="text-[10px] font-bold uppercase truncate group-hover:text-[#007D8A]">{r}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-gray-500 block mb-2">Distritos</label>
+                                            <div className="max-h-32 overflow-y-auto border-2 border-black bg-white p-2 space-y-1 custom-scrollbar">
+                                                {distritosFpolis.map(r => (
+                                                    <label key={r} className="flex items-center space-x-2 cursor-pointer p-1.5 hover:bg-gray-100 group">
+                                                        <input type="checkbox" checked={globalFilters.distritos.includes(r)} onChange={() => setGlobalFilters(prev => ({ ...prev, distritos: prev.distritos.includes(r) ? prev.distritos.filter(v => v !== r) : [...prev.distritos, r] }))} className="w-4 h-4 accent-black border-2 border-black" />
+                                                        <span className="text-[10px] font-bold uppercase truncate group-hover:text-[#007D8A]">{r}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
                                     <div>
                                         <label className="text-[10px] font-bold uppercase text-gray-500 block mb-2">Regiões do Estado</label>
                                         <div className="max-h-32 overflow-y-auto border-2 border-black bg-white p-2 space-y-1 custom-scrollbar">
-                                            {regioes.map(r => (
+                                            {regioesEstado.map(r => (
                                                 <label key={r} className="flex items-center space-x-2 cursor-pointer p-1.5 hover:bg-gray-100 group">
                                                     <input type="checkbox" checked={globalFilters.regioes.includes(r)} onChange={() => setGlobalFilters(prev => ({ ...prev, regioes: prev.regioes.includes(r) ? prev.regioes.filter(v => v !== r) : [...prev.regioes, r] }))} className="w-4 h-4 accent-black border-2 border-black" />
                                                     <span className="text-[10px] font-bold uppercase truncate group-hover:text-[#007D8A]">{r}</span>
@@ -624,14 +663,52 @@ const Dashboard = () => {
         return true;
     };
 
+    // Mapas de Localização para filtro de Leads (que não possuem região preenchida na planilha)
+    const bairroToRegiao = useMemo(() => {
+        const map = {};
+        capital.forEach(c => { if (c.Bairro && c.Regiao) map[normalizeStr(c.Bairro)] = c.Regiao; });
+        return map;
+    }, [capital]);
+
+    const bairroToDistrito = useMemo(() => {
+        const map = {};
+        capital.forEach(c => { if (c.Bairro && c.Distrito) map[normalizeStr(c.Bairro)] = c.Distrito; });
+        return map;
+    }, [capital]);
+
+    const muniToRegiao = useMemo(() => {
+        const map = {};
+        estado.forEach(e => { if (e.Cidade && e.Regiao) map[normalizeStr(e.Cidade)] = e.Regiao; });
+        return map;
+    }, [estado]);
+
+
     const filteredEmendas = useMemo(() => emendas.filter(e => filterByTerritory(e.municipio) && (globalFilters.regioes.length === 0 || globalFilters.regioes.includes(e.regiao)) && (globalFilters.temas.length === 0 || globalFilters.temas.includes(e.tema))), [emendas, globalFilters, territoryScope, includeFloripa]);
-    const filteredLeads = useMemo(() => leads.filter(l => filterByTerritory(l.municipio) && (globalFilters.temas.length === 0 || !l.tema || globalFilters.temas.includes(l.tema))), [leads, globalFilters, territoryScope, includeFloripa]);
+    
+    const filteredLeads = useMemo(() => leads.filter(l => {
+        if (!filterByTerritory(l.municipio)) return false;
+        if (globalFilters.temas.length > 0 && !globalFilters.temas.includes(l.tema)) return false;
+        
+        if (territoryScope === 'CAPITAL') {
+            const reg = bairroToRegiao[normalizeStr(l.bairro)];
+            const dist = bairroToDistrito[normalizeStr(l.bairro)];
+            if (globalFilters.regioes.length > 0 && !globalFilters.regioes.includes(reg)) return false;
+            if (globalFilters.distritos.length > 0 && !globalFilters.distritos.includes(dist)) return false;
+        } else {
+            const reg = muniToRegiao[normalizeStr(l.municipio)];
+            if (globalFilters.regioes.length > 0 && !globalFilters.regioes.includes(reg)) return false;
+        }
+        return true;
+    }), [leads, globalFilters, territoryScope, includeFloripa, bairroToRegiao, bairroToDistrito, muniToRegiao]);
+
     const filteredAgenda = useMemo(() => agenda.filter(a => filterByTerritory(a.municipio)), [agenda, territoryScope, includeFloripa]);
+    
     const filteredContatos = useMemo(() => contatos.filter(c => {
         const isF = c.base.includes('Florianópolis');
         if (territoryScope === 'CAPITAL' && !isF) return false;
         if (territoryScope === 'INTERIOR' && isF && !includeFloripa) return false;
         if (globalFilters.regioes.length > 0 && !globalFilters.regioes.includes(c.regiao)) return false;
+        if (globalFilters.distritos.length > 0 && !globalFilters.distritos.includes(c.distrito)) return false;
         if (globalFilters.temas.length > 0 && !globalFilters.temas.includes(c.tema)) return false;
         return true;
     }), [contatos, globalFilters, territoryScope, includeFloripa]);
@@ -701,12 +778,58 @@ const Dashboard = () => {
 
     const crossChartLocaisCapital = useMemo(() => {
         const map = {}; let invalid = 0;
+        // Bairros da capital ignoram o switch 'includeFloripa' para montar o top 10, usa apenas a base
         [...leads.filter(l => isFloripa(l.municipio)), ...contatos.filter(c => c.base.includes('Florianópolis'))].forEach(item => {
             const loc = item.bairro || item.municipio_bairro;
             if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
         });
         return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
     }, [leads, contatos]);
+
+    const crossChartEngajamentoRegiao = useMemo(() => {
+        const map = {}; let invalid = 0;
+        
+        if (territoryScope === 'CAPITAL') {
+            filteredContatos.forEach(c => {
+                const r = c.regiao;
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].liderancas += 1;
+            });
+            filteredLeads.forEach(l => {
+                const r = bairroToRegiao[normalizeStr(l.bairro)];
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].leads += 1;
+            });
+        } else {
+            filteredContatos.forEach(c => {
+                const r = c.regiao;
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].liderancas += 1;
+            });
+            filteredLeads.forEach(l => {
+                const r = muniToRegiao[normalizeStr(l.municipio)];
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].leads += 1;
+            });
+        }
+
+        return { 
+            data: Object.entries(map).map(([name, counts]) => ({ 
+                name, 
+                value: 0, 
+                visualTotal: (counts.liderancas * 10) + counts.leads, 
+                segments: [
+                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
+                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
+                ]
+            })), 
+            invalid 
+        };
+    }, [filteredContatos, filteredLeads, territoryScope, bairroToRegiao, muniToRegiao]);
 
     const crossChartVotosEmendasRegiao = useMemo(() => {
         const map = {}; let invalid = 0;
@@ -803,7 +926,15 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:gap-8 mt-6 md:mt-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-6 md:mt-8">
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[800px]">
+                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Engajamento por Região</h3>
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                         <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume de Lideranças + Leads</p>
+                         <SortableBarChartStacked data={crossChartEngajamentoRegiao.data} invalidValue={crossChartEngajamentoRegiao.invalid} invalidLabel="Região Não Mapeada" onLabelClick={(t) => handleLabelClick('regiao', t)} legend1="Lideranças" color1="bg-[#C1272D]" legend2="Leads" color2="bg-black" />
+                    </div>
+                </div>
+
                 <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[800px]">
                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Votos vs Emendas (Regiões SC)</h3>
                     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1416,10 +1547,10 @@ const GlobalStats = () => {
 const AppContent = () => {
     const { loadingInfo, selectedEntity, mainView, setMainView } = useContext(AppContext);
 
+    if (loadingInfo.isLoading) return <LoadingScreen loadingInfo={loadingInfo} />;
+
     return (
         <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#FDFBF7] text-[#111111] font-sans relative">
-            {loadingInfo.isLoading && <LoadingScreen loadingInfo={loadingInfo} />}
-            
             <Sidebar />
             <main className="flex-1 flex flex-col overflow-hidden relative">
                 <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#111 1.5px, transparent 1.5px)', backgroundSize: '24px 24px' }}></div>
