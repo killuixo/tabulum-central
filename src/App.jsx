@@ -118,7 +118,7 @@ const AppProvider = ({ children }) => {
     const [isMock, setIsMock] = useState(false);
     
     const [selectedEntity, setSelectedEntity] = useState(null); 
-    const [territoryScope, setTerritoryScope] = useState('ALL'); 
+    const [territoryScope, setTerritoryScope] = useState('ESTADO'); 
     const [includeFloripa, setIncludeFloripa] = useState(false); 
     const [globalFilters, setGlobalFilters] = useState({ temas: [], regioes: [] });
     const [mainView, setMainView] = useState('dashboard');
@@ -184,17 +184,37 @@ const AppProvider = ({ children }) => {
                     tema: getTemaFromOrigem(l['ORIGEM'] || l['origem'])
                 })).filter(l => l.municipio);
 
-                const emendas = emendasRaw.map((e, i) => ({
-                    id: `e_${i}`,
-                    numero: e['NÚMERO DA EMENDA'] || e['numero'] || '',
-                    municipio: (e['MUNICÍPIO'] || e['municipio'] || '').trim(),
-                    objeto: e['OBJETO'] || e['objeto'] || '',
-                    total: parseCurrency(e['TOTAL'] || e['total']),
-                    tema: e['TEMA'] || e['tema'] || '',
-                    articulador: (e['ARTICULADOR'] || e['articulador'] || '').trim(),
-                    regiao: e['REGIÃO'] || e['regiao'] || '',
-                    razaoSocial: (e['RAZÃO SOCIAL'] || e['razao social'] || '').trim()
-                })).filter(e => e.numero);
+                const emendas = emendasRaw.map((e, i) => {
+                    const muni = (e['MUNICÍPIO'] || e['municipio'] || '').trim();
+                    const razaoSocialRaw = (e['RAZÃO SOCIAL'] || e['razao social'] || '').trim();
+                    const esfera = (e['ESFERA DE APLICAÇÃO'] || e['esfera de aplicação'] || '').trim();
+                    const objeto = (e['OBJETO'] || e['objeto'] || '').trim();
+                    
+                    let razaoSocialFinal = razaoSocialRaw;
+                    if (isInvalidData(razaoSocialFinal)) {
+                        if (esfera.toLowerCase().includes('munic')) {
+                            razaoSocialFinal = 'Prefeitura de ' + muni;
+                        } else if (esfera.toLowerCase().includes('estadual')) {
+                            razaoSocialFinal = 'Governo do Estado de SC';
+                        } else if (objeto) {
+                            razaoSocialFinal = objeto;
+                        } else {
+                            razaoSocialFinal = 'Entidade Não Informada';
+                        }
+                    }
+
+                    return {
+                        id: `e_${i}`,
+                        numero: e['NÚMERO DA EMENDA'] || e['numero'] || '',
+                        municipio: muni,
+                        objeto: objeto,
+                        total: parseCurrency(e['TOTAL'] || e['total']),
+                        tema: e['TEMA'] || e['tema'] || '',
+                        articulador: (e['ARTICULADOR'] || e['articulador'] || '').trim(),
+                        regiao: e['REGIÃO'] || e['regiao'] || '',
+                        razaoSocial: razaoSocialFinal
+                    };
+                }).filter(e => e.numero);
 
                 const agenda = agendaRaw.map((a, i) => ({
                     id: `a_${i}`,
@@ -290,7 +310,7 @@ const NativeBarChart = ({ data, colorClass, valueFormatter = (v) => v, onLabelCl
                     Ordem {sortDesc ? 'Decrescente' : 'Crescente'} {sortDesc ? <Icons.SortDesc /> : <Icons.SortAsc />}
                 </button>
             </div>
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+            <div className="overflow-y-auto pr-2 space-y-4 custom-scrollbar max-h-[260px]">
                 {sorted.map((item, idx) => (
                     <div key={idx}>
                         <div className="flex justify-between text-xs font-black uppercase mb-1 tracking-wider">
@@ -336,7 +356,7 @@ const SortableBarChartStacked = ({ data, invalidLabel = 'Não Definidos', invali
                 </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px]">
+            <div className="overflow-y-auto pr-2 space-y-4 custom-scrollbar max-h-[260px]">
                 {sortedData.length === 0 ? (
                     <div className="p-4 text-gray-400 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Nenhum registro validado.</div>
                 ) : (
@@ -431,19 +451,14 @@ const Sidebar = () => {
                         <Icons.MapPin /> <span className="ml-1">Foco Territorial</span>
                     </label>
                     <div className="flex flex-col gap-2 border-2 border-black p-1 bg-gray-100">
-                        <button onClick={() => {setTerritoryScope('ALL'); setMainView('dashboard');}} className={`p-2 text-xs font-black uppercase border-2 transition-colors ${territoryScope === 'ALL' ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-transparent hover:bg-gray-200'}`}>
-                            Visão Geral (Estado)
+                        <button onClick={() => setTerritoryScope('ESTADO')} className={`p-2 text-xs font-black uppercase border-2 transition-colors ${territoryScope === 'ESTADO' ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-transparent hover:bg-gray-200'}`}>
+                            SANTA CATARINA
                         </button>
-                        <div className="flex gap-2">
-                            <button onClick={() => {setTerritoryScope('CAPITAL'); setMainView('dashboard');}} className={`flex-1 p-2 text-[10px] font-black uppercase border-2 transition-colors ${territoryScope === 'CAPITAL' ? 'bg-[#007D8A] text-white border-black' : 'bg-white text-gray-500 border-transparent hover:bg-gray-200'}`}>
-                                Capital (Floripa)
-                            </button>
-                            <button onClick={() => {setTerritoryScope('INTERIOR'); setMainView('dashboard');}} className={`flex-1 p-2 text-[10px] font-black uppercase border-2 transition-colors ${territoryScope === 'INTERIOR' ? 'bg-[#C1272D] text-white border-black' : 'bg-white text-gray-500 border-transparent hover:bg-gray-200'}`}>
-                                Interior (SC)
-                            </button>
-                        </div>
+                        <button onClick={() => setTerritoryScope('CAPITAL')} className={`p-2 text-[10px] font-black uppercase border-2 transition-colors ${territoryScope === 'CAPITAL' ? 'bg-[#007D8A] text-white border-black' : 'bg-white text-gray-500 border-transparent hover:bg-gray-200'}`}>
+                            FLORIANÓPOLIS
+                        </button>
                     </div>
-                    {territoryScope !== 'CAPITAL' && (
+                    {territoryScope === 'ESTADO' && (
                         <label className="flex items-center space-x-2 mt-3 cursor-pointer group w-fit">
                             <input type="checkbox" checked={includeFloripa} onChange={e => setIncludeFloripa(e.target.checked)} className="w-4 h-4 accent-black border-2 border-black cursor-pointer" />
                             <span className="text-[10px] font-bold uppercase text-gray-600 group-hover:text-black">Incluir Floripa no Estado</span>
@@ -456,9 +471,9 @@ const Sidebar = () => {
                         <label className="text-[10px] font-black uppercase tracking-widest block mb-2">Busca Universal</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><Icons.Search /></div>
-                            <input type="text" placeholder="Local, articulador, tema..." className="block w-full pl-10 pr-3 py-3 border-4 border-black bg-white font-bold text-sm focus:outline-none focus:border-[#C1272D] transition-colors" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            <input type="text" placeholder="Local, articulador, tema, inst..." className="block w-full pl-10 pr-3 py-3 border-4 border-black bg-white font-bold text-sm focus:outline-none focus:border-[#C1272D] transition-colors" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             {searchResults.length > 0 && (
-                                <ul className="absolute z-50 w-full mt-2 bg-white border-4 border-black max-h-60 overflow-auto shadow-[4px_4px_0_0_rgba(17,17,17,1)]">
+                                <ul className="absolute z-50 w-full mt-2 bg-white border-4 border-black max-h-60 overflow-auto shadow-[4px_4px_0_0_rgba(17,17,17,1)] custom-scrollbar">
                                     {searchResults.map((res, idx) => (
                                         <li key={idx} className="px-4 py-3 hover:bg-[#EAA221] cursor-pointer text-xs font-bold uppercase border-b-2 border-black last:border-0" onClick={() => { setSelectedEntity({type: res.type, name: res.name}); setSearchTerm(''); }}>{res.label}</li>
                                     ))}
@@ -478,7 +493,7 @@ const Sidebar = () => {
                                     <div className="max-h-32 overflow-y-auto border-2 border-black bg-white p-2 space-y-1 custom-scrollbar">
                                         {regioes.map(r => (
                                             <label key={r} className="flex items-center space-x-2 cursor-pointer p-1.5 hover:bg-gray-100 group">
-                                                <input type="checkbox" checked={globalFilters.regioes.includes(r)} onChange={() => setGlobalFilters(prev => ({ ...prev, regioes: prev.regioes.includes(r) ? prev.regioes.filter(v => v !== r) : [...prev.regioes, r] }))} className="w-4 h-4 accent-black border-2 border-black" />
+                                                <input type="checkbox" checked={globalFilters.regioes.includes(r)} onChange={() => setGlobalFilters(prev => ({ ...prev, regioes: prev.regioes.includes(r) ? prev.regioes.filter(v => v !== r) : [...prev.regioes, r] }))} className="w-4 h-4 accent-black border-2 border-black cursor-pointer" />
                                                 <span className="text-[10px] font-bold uppercase truncate group-hover:text-[#007D8A]">{r}</span>
                                             </label>
                                         ))}
@@ -490,7 +505,7 @@ const Sidebar = () => {
                                 <div className="max-h-40 overflow-y-auto border-2 border-black bg-white p-2 space-y-1 custom-scrollbar">
                                     {temas.map(t => (
                                         <label key={t} className="flex items-center space-x-2 cursor-pointer p-1.5 hover:bg-gray-100 group">
-                                            <input type="checkbox" checked={globalFilters.temas.includes(t)} onChange={() => setGlobalFilters(prev => ({ ...prev, temas: prev.temas.includes(t) ? prev.temas.filter(v => v !== t) : [...prev.temas, t] }))} className="w-4 h-4 accent-black border-2 border-black" />
+                                            <input type="checkbox" checked={globalFilters.temas.includes(t)} onChange={() => setGlobalFilters(prev => ({ ...prev, temas: prev.temas.includes(t) ? prev.temas.filter(v => v !== t) : [...prev.temas, t] }))} className="w-4 h-4 accent-black border-2 border-black cursor-pointer" />
                                             <span className="text-[10px] font-bold uppercase truncate group-hover:text-[#EAA221]">{t}</span>
                                         </label>
                                     ))}
@@ -510,8 +525,7 @@ const GlobalStats = () => {
     const filterByTerritory = (mun) => {
         const isF = isFloripa(mun);
         if (territoryScope === 'CAPITAL') return isF;
-        if (territoryScope === 'INTERIOR') return !isF;
-        if (isF && !includeFloripa) return false;
+        if (territoryScope === 'ESTADO') return isF ? includeFloripa : true;
         return true;
     };
 
@@ -521,8 +535,7 @@ const GlobalStats = () => {
     const filteredContatos = useMemo(() => contatos.filter(c => {
         const isF = c.base.includes('Florianópolis');
         if (territoryScope === 'CAPITAL' && !isF) return false;
-        if (territoryScope === 'INTERIOR' && isF) return false;
-        if (territoryScope === 'ALL' && isF && !includeFloripa) return false;
+        if (territoryScope === 'ESTADO' && isF && !includeFloripa) return false;
         if (globalFilters.regioes.length > 0 && !globalFilters.regioes.includes(c.regiao)) return false;
         if (globalFilters.temas.length > 0 && !globalFilters.temas.includes(c.tema)) return false;
         return true;
@@ -531,7 +544,7 @@ const GlobalStats = () => {
     const statsVotos = useMemo(() => {
         let vAntigo = 0, vNovo = 0;
         
-        if (territoryScope !== 'CAPITAL') {
+        if (territoryScope === 'ESTADO') {
             estado.forEach(e => {
                 if (isFloripa(e.Cidade) && !includeFloripa) return;
                 vAntigo += e.Votos2018;
@@ -539,14 +552,10 @@ const GlobalStats = () => {
             });
         }
         
-        if (territoryScope === 'CAPITAL' || (territoryScope === 'ALL' && includeFloripa)) {
+        if (territoryScope === 'CAPITAL') {
             capital.forEach(c => {
-                if (territoryScope === 'CAPITAL') {
-                    vAntigo += c.Votos2022;
-                    vNovo += c.Votos2024;
-                } else {
-                    vNovo += c.Votos2022; 
-                }
+                vAntigo += c.Votos2022;
+                vNovo += c.Votos2024;
             });
         }
         return { vAntigo, vNovo, lblAntigo: territoryScope === 'CAPITAL' ? '2022' : '2018', lblNovo: territoryScope === 'CAPITAL' ? '2024' : '2022' };
@@ -555,7 +564,12 @@ const GlobalStats = () => {
     return (
         <div className="w-full max-w-6xl mx-auto mb-8 animate-fade-in shrink-0">
             <div className={`text-white border-4 border-black p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col mb-6 ${territoryScope === 'CAPITAL' ? 'bg-[#007D8A]' : 'bg-[#EAA221] text-black'}`}>
-                <span className={`text-[10px] font-black uppercase tracking-widest block mb-4 ${territoryScope === 'CAPITAL' ? 'text-white/70' : 'text-black/70'}`}>Evolução de Votos ({territoryScope === 'CAPITAL' ? 'Capital' : 'SC'})</span>
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-4 ${territoryScope === 'CAPITAL' ? 'text-white/70' : 'text-black/70'}`}>
+                    Evolução de Votos ({territoryScope === 'CAPITAL' ? 'Capital' : 'SC'})
+                    <span className="opacity-50 text-[8px] ml-2">
+                        {territoryScope === 'ESTADO' ? (includeFloripa ? '(Incluindo Floripa)' : '(Omitindo Floripa)') : ''}
+                    </span>
+                </span>
                 <div className="flex items-end gap-6">
                     <div className="flex flex-col">
                         <span className="text-sm font-bold opacity-80">{statsVotos.lblAntigo}</span>
@@ -596,14 +610,92 @@ const GlobalStats = () => {
     );
 };
 
+const InstitutionStats = () => {
+    const { emendas } = useContext(AppContext);
+    
+    const stats = useMemo(() => {
+        let totalVal = 0;
+        let pubVal = 0;
+        let privVal = 0;
+        let pubCount = 0;
+        let privCount = 0;
+        const instMap = {};
+        const regioesMap = {};
+
+        emendas.forEach(e => {
+            const r = normalizeStr(e.razaoSocial);
+            if (isInvalidData(r)) return;
+            if (!instMap[r]) {
+                instMap[r] = true;
+                if (isPublicInstitution(r)) pubCount++; else privCount++;
+            }
+            totalVal += e.total;
+            if (isPublicInstitution(r)) pubVal += e.total; else privVal += e.total;
+            
+            const reg = e.regiao || 'S/ Região';
+            regioesMap[reg] = (regioesMap[reg] || 0) + e.total;
+        });
+
+        const topRegiao = Object.entries(regioesMap).sort((a,b) => b[1] - a[1])[0] || ['Nenhuma', 0];
+
+        return {
+            totalCount: pubCount + privCount,
+            totalVal,
+            pubCount, pubVal,
+            privCount, privVal,
+            topRegiaoName: topRegiao[0],
+            topRegiaoVal: topRegiao[1]
+        };
+    }, [emendas]);
+
+    return (
+        <div className="w-full max-w-6xl mx-auto mb-8 animate-fade-in shrink-0">
+            <div className="text-white border-4 border-black p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col mb-6 bg-[#C1272D]">
+                <span className="text-[10px] font-black uppercase tracking-widest block mb-4 text-white/70">Visão Geral de Entidades / Razão Social</span>
+                <div className="flex items-end gap-6">
+                    <div className="flex flex-col">
+                        <span className="text-sm font-bold opacity-80">Total Destinado</span>
+                        <span className="text-4xl md:text-5xl font-black">{formatCurrency(stats.totalVal)}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Entidades Atendidas</h3>
+                    <div className="text-4xl font-black">{stats.totalCount}</div>
+                    <div className="h-2 w-full bg-black mt-2 border border-black"></div>
+                </div>
+                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Instituições Públicas</h3>
+                    <div className="text-xl font-black">{formatCurrency(stats.pubVal)}</div>
+                    <div className="text-[10px] font-bold mt-1 text-gray-400 uppercase">{stats.pubCount} Entidades</div>
+                    <div className="h-2 w-full bg-[#C1272D] mt-2 border border-black"></div>
+                </div>
+                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Demais Entidades (OSCs)</h3>
+                    <div className="text-xl font-black">{formatCurrency(stats.privVal)}</div>
+                    <div className="text-[10px] font-bold mt-1 text-gray-400 uppercase">{stats.privCount} Entidades</div>
+                    <div className="h-2 w-full bg-[#EAA221] mt-2 border border-black"></div>
+                </div>
+                <div className="bg-white border-4 border-black p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Região + Beneficiada</h3>
+                    <div className="text-lg font-black truncate">{stats.topRegiaoName}</div>
+                    <div className="text-[10px] font-bold mt-1 text-gray-400 uppercase">{formatCurrency(stats.topRegiaoVal)}</div>
+                    <div className="h-2 w-full bg-[#007D8A] mt-2 border border-black"></div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Dashboard = () => {
     const { leads, emendas, agenda, contatos, estado, setSelectedEntity, globalFilters, territoryScope, includeFloripa, isMock } = useContext(AppContext);
 
     const filterByTerritory = (mun) => {
         const isF = isFloripa(mun);
         if (territoryScope === 'CAPITAL') return isF;
-        if (territoryScope === 'INTERIOR') return !isF;
-        if (isF && !includeFloripa) return false;
+        if (territoryScope === 'ESTADO') return isF ? includeFloripa : true;
         return true;
     };
 
@@ -613,8 +705,7 @@ const Dashboard = () => {
     const filteredContatos = useMemo(() => contatos.filter(c => {
         const isF = c.base.includes('Florianópolis');
         if (territoryScope === 'CAPITAL' && !isF) return false;
-        if (territoryScope === 'INTERIOR' && isF) return false;
-        if (territoryScope === 'ALL' && isF && !includeFloripa) return false;
+        if (territoryScope === 'ESTADO' && isF && !includeFloripa) return false;
         if (globalFilters.regioes.length > 0 && !globalFilters.regioes.includes(c.regiao)) return false;
         if (globalFilters.temas.length > 0 && !globalFilters.temas.includes(c.tema)) return false;
         return true;
@@ -695,7 +786,6 @@ const Dashboard = () => {
         };
     }, [estado, filteredEmendas, territoryScope, includeFloripa]);
 
-
     const crossChartArticuladores = useMemo(() => {
         const map = {}; let invalid = 0;
         [...filteredAgenda, ...filteredEmendas, ...filteredContatos].forEach(item => {
@@ -719,7 +809,6 @@ const Dashboard = () => {
 
     const crossChartLocaisCapital = useMemo(() => {
         const map = {}; let invalid = 0;
-        // Ignora os filtros estaduais e puxa direto da base global para Bairros
         leads.forEach(l => {
             if (isFloripa(l.municipio) && (globalFilters.temas.length === 0 || !l.tema || globalFilters.temas.includes(l.tema))) {
                 const loc = l.bairro;
@@ -1187,7 +1276,7 @@ const FichaCompleta = () => {
 }
 
 const AppContent = () => {
-    const { loadingInfo, selectedEntity, mainView, setMainView } = useContext(AppContext);
+    const { loadingInfo, selectedEntity, mainView, setMainView, setTerritoryScope } = useContext(AppContext);
 
     if (loadingInfo.isLoading) return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4">
@@ -1210,14 +1299,14 @@ const AppContent = () => {
                 {!selectedEntity && (
                     <div className="flex border-b-4 border-black bg-white z-10 shadow-sm shrink-0 overflow-x-auto">
                         <button onClick={() => setMainView('dashboard')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'dashboard' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}>Painel Analítico</button>
-                        <button onClick={() => setMainView('lista_sc')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_sc' ? 'bg-[#EAA221] text-black' : 'hover:bg-gray-100'}`}>Raio-X: Estado</button>
-                        <button onClick={() => setMainView('lista_floripa')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_floripa' ? 'bg-[#007D8A] text-white' : 'hover:bg-gray-100'}`}>Raio-X: Capital</button>
+                        <button onClick={() => { setMainView('lista_sc'); setTerritoryScope('ESTADO'); }} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_sc' ? 'bg-[#EAA221] text-black' : 'hover:bg-gray-100'}`}>Raio-X: Estado</button>
+                        <button onClick={() => { setMainView('lista_floripa'); setTerritoryScope('CAPITAL'); }} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_floripa' ? 'bg-[#007D8A] text-white' : 'hover:bg-gray-100'}`}>Raio-X: Capital</button>
                         <button onClick={() => setMainView('lista_instituicoes')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest transition-colors whitespace-nowrap ${mainView === 'lista_instituicoes' ? 'bg-[#C1272D] text-white' : 'hover:bg-gray-100'}`}>Raio-X: Instituições</button>
                     </div>
                 )}
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 relative z-10 custom-scrollbar">
-                    {!selectedEntity && <GlobalStats />}
+                    {!selectedEntity && mainView === 'lista_instituicoes' ? <InstitutionStats /> : (!selectedEntity && <GlobalStats />)}
                     {selectedEntity ? <FichaCompleta /> : (
                         mainView === 'dashboard' ? <Dashboard /> :
                         mainView === 'lista_sc' ? <ListaMunicipios /> :
