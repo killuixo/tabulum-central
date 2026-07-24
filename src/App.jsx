@@ -164,6 +164,7 @@ const AppProvider = ({ children }) => {
                     dadosGerais.capital = arr.map(parseRowCapital);
                 }
 
+                // Injecting Mocks if variables are not provided
                 if (leadsRaw.length === 0 && emendasRaw.length === 0 && dadosGerais.estado.length === 0) {
                     setIsMock(true);
                     leadsRaw = [{ nome: "João", cidade: "Florianópolis", bairroReplan: "Campeche", origem: "Assinatura Horta" }, { nome: "Maria", cidade: "Lages", origem: "Seminário Agroecologia" }];
@@ -1083,6 +1084,49 @@ const ListaInstituicoes = () => {
     );
 };
 
+const SistemaTabulum = () => {
+    const apps = [
+        { name: "Monitor Legislativo (MoniLegis)", url: "https://tabulum-sig-monilegis.vercel.app/", desc: "Monitora as páginas da ALESC pelos Processos Legislativos e Atividades Parlamentares do deputado Marquito." },
+        { name: "Mapa Eleitoral (MapEl)", url: "https://tabulum-mapel.vercel.app/", desc: "Sistematiza o histórico de votações de Marquito, tanto em Florianópolis como por Santa Catarina." },
+        { name: "Gestão de Agenda", url: "https://tabulum-gestagen.vercel.app/", desc: "Vinculada com o Google Calendar do mandato, sistematiza a agenda do deputado." },
+        { name: "Leads", url: "https://tabulum-leads.vercel.app/", desc: "Gestão e análise dos Leads captados em eventos do mandato. Protegido por senha pois contém muitos dados sensíveis, se necessário, consultar Carlos ou Lui para receber acesso." },
+        { name: "Mapa de Lideranças (MapLid)", url: "https://tabulum-sig-maplid.vercel.app/", desc: "Faz gestão e análise dos dados organizados juntos ao Milo sobre as Lideranças parceiras do mandato." },
+        { name: "Painel de Utilidade Pública (PUP)", url: "https://tabulum-sig.vercel.app/", desc: "Auxilia na gestão dos pedidos de Utilidade Pública recebido pelo mandato." }
+    ];
+
+    return (
+        <div className="w-full max-w-4xl mx-auto pb-12 animate-fade-in">
+            <div className="bg-white border-4 border-black p-6 md:p-8 shadow-[8px_8px_0_0_rgba(17,17,17,1)] mb-8">
+                <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">Sistema Tabulum</h1>
+                <p className="text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest mb-6">aplicativos para gestão da informação do mandato de Marquito.</p>
+                
+                <div className="bg-[#EAA221] border-4 border-black p-4 mb-6 text-black font-bold text-sm shadow-[4px_4px_0_0_rgba(17,17,17,1)]">
+                    <span className="font-black uppercase block mb-1">⚠️ Aviso Importante:</span>
+                    Estes aplicativos ainda são protótipos, podem conter falhas. Não compartilhe com ninguém, uso exclusivo da assessoria e articulação da equipe de Marquito.
+                </div>
+
+                <div className="bg-gray-100 border-2 border-black p-4 mb-6 text-sm font-bold text-gray-700">
+                    O quanto mais a equipe utilizar o programa, mais refinado ele vai ficar. Qualquer sugestão, gráficos, filtros, outros programas, relação entre dados, por favor, fale com o assessor Lui.
+                </div>
+
+                <p className="font-black uppercase text-sm mb-4 border-b-4 border-black pb-2">Em breve o aplicativo TABULUM será unificado. Enquanto isto, temos os seguintes aplicativos:</p>
+
+                <div className="space-y-4">
+                    {apps.map((app, i) => (
+                        <div key={i} className="border-4 border-black p-4 bg-white hover:bg-gray-50 transition-transform hover:-translate-y-1 shadow-[4px_4px_0_0_rgba(17,17,17,1)]">
+                            <a href={app.url} target="_blank" rel="noopener noreferrer" className="text-lg sm:text-xl font-black uppercase text-[#007D8A] hover:text-[#C1272D] flex flex-col sm:flex-row sm:items-center gap-2 group transition-colors">
+                                {app.name} 
+                                <span className="w-fit text-[10px] border-2 border-black bg-[#007D8A] text-white px-2 py-1 uppercase group-hover:bg-[#C1272D] transition-colors shadow-sm">Acessar &rarr;</span>
+                            </a>
+                            <p className="text-xs sm:text-sm font-bold text-gray-500 mt-2 leading-relaxed uppercase">{app.desc}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const FichaCompleta = () => {
     const { selectedEntity, setSelectedEntity, leads, contatos, emendas, agenda, estado, capital } = useContext(AppContext);
     
@@ -1301,17 +1345,19 @@ const AppContent = () => {
                         <button onClick={() => setMainView('dashboard')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'dashboard' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}>Painel Analítico</button>
                         <button onClick={() => { setMainView('lista_sc'); setTerritoryScope('ESTADO'); }} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_sc' ? 'bg-[#EAA221] text-black' : 'hover:bg-gray-100'}`}>Raio-X: Estado</button>
                         <button onClick={() => { setMainView('lista_floripa'); setTerritoryScope('CAPITAL'); }} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_floripa' ? 'bg-[#007D8A] text-white' : 'hover:bg-gray-100'}`}>Raio-X: Capital</button>
-                        <button onClick={() => setMainView('lista_instituicoes')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest transition-colors whitespace-nowrap ${mainView === 'lista_instituicoes' ? 'bg-[#C1272D] text-white' : 'hover:bg-gray-100'}`}>Raio-X: Instituições</button>
+                        <button onClick={() => setMainView('lista_instituicoes')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_instituicoes' ? 'bg-[#C1272D] text-white' : 'hover:bg-gray-100'}`}>Raio-X: Instituições</button>
+                        <button onClick={() => setMainView('outros_apps')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest transition-colors whitespace-nowrap ${mainView === 'outros_apps' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}>Outros Apps</button>
                     </div>
                 )}
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 relative z-10 custom-scrollbar">
-                    {!selectedEntity && mainView === 'lista_instituicoes' ? <InstitutionStats /> : (!selectedEntity && <GlobalStats />)}
+                    {!selectedEntity && mainView !== 'outros_apps' && mainView === 'lista_instituicoes' ? <InstitutionStats /> : (!selectedEntity && mainView !== 'outros_apps' && <GlobalStats />)}
                     {selectedEntity ? <FichaCompleta /> : (
                         mainView === 'dashboard' ? <Dashboard /> :
                         mainView === 'lista_sc' ? <ListaMunicipios /> :
                         mainView === 'lista_floripa' ? <ListaCapital /> :
-                        <ListaInstituicoes />
+                        mainView === 'lista_instituicoes' ? <ListaInstituicoes /> :
+                        mainView === 'outros_apps' ? <SistemaTabulum /> : null
                     )}
                 </div>
             </main>
