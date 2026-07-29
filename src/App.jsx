@@ -217,7 +217,6 @@ const AppProvider = ({ children }) => {
                     const bairro = (a['Bairro'] || a['bairro'] || '').trim();
                     const local = (a['Local'] || '').trim();
                     
-                    // Fallback para capital
                     if (!mun && (normalizeStr(bairro).includes('centro') || normalizeStr(local).includes('alesc') || normalizeStr(local).includes('florianopolis'))) {
                         mun = 'Florianópolis';
                     }
@@ -266,30 +265,42 @@ const AppProvider = ({ children }) => {
     );
 };
 
-// Componente Exclusivo de Carregamento com Frases Rotativas
 const LoadingScreen = ({ loadingInfo }) => {
     const messages = [
-        "Isto pode levar alguns minutos.",
-        "Aguarde, por favor.",
-        "Carregando nova planilha, aguarde.",
-        "Faltam poucos instantes."
+        "Você pode visualizar os dados de Santa Catarina com ou sem os números da Capital.",
+        "Filtre o Estado por Tema e Região, e Florianópolis por Tema, Região e Distrito.",
+        "Clique em qualquer Cidade, Região, Distrito, Articulador ou Entidade para abrir sua ficha completa.",
+        "Nos 'Raio-X', clique nos títulos das colunas para ordenar as listas por ordem alfabética ou numérica."
     ];
-    const [msgIndex, setMsgIndex] = useState(0);
+    
+    const [displayMsg, setDisplayMsg] = useState("Isto pode levar alguns minutos, aguarde.");
+    const [isNewSheet, setIsNewSheet] = useState(false);
 
-    // Rotação de 30 segundos
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setMsgIndex((prev) => (prev + 1) % messages.length);
-        }, 30000);
-        return () => clearInterval(interval);
-    }, [messages.length]);
-
-    // Forçar mensagem de "nova planilha" ao mudar de estágio
+    // Identifica e reage sempre que o estágio de carregamento muda
     useEffect(() => {
         if (loadingInfo.progress > 0 && loadingInfo.progress < 100) {
-            setMsgIndex(2);
+            setDisplayMsg("Carregando nova planilha, aguarde.");
+            setIsNewSheet(true);
+            
+            const timer = setTimeout(() => {
+                setIsNewSheet(false);
+                setDisplayMsg(messages[Math.floor(Math.random() * messages.length)]);
+            }, 3000);
+            
+            return () => clearTimeout(timer);
         }
     }, [loadingInfo.stage]);
+
+    // Rotação aleatória de mensagens de contexto
+    useEffect(() => {
+        let interval;
+        if (!isNewSheet && loadingInfo.progress > 0 && loadingInfo.progress < 100) {
+            interval = setInterval(() => {
+                setDisplayMsg(messages[Math.floor(Math.random() * messages.length)]);
+            }, 5000);
+        }
+        return () => { if(interval) clearInterval(interval); };
+    }, [isNewSheet, loadingInfo.progress]);
 
     const isDone = loadingInfo.progress === 100 || loadingInfo.stage === 'Concluído';
 
@@ -315,8 +326,8 @@ const LoadingScreen = ({ loadingInfo }) => {
                         <div className="w-full h-3 bg-gray-200 border-2 border-black overflow-hidden">
                             <div className="h-full bg-black transition-all duration-300 ease-out" style={{ width: `${loadingInfo.progress}%` }}></div>
                         </div>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase mt-2 animate-fade-in" key={msgIndex}>
-                            {messages[msgIndex]}
+                        <p className="text-[10px] font-bold text-gray-500 uppercase mt-2 animate-fade-in" key={displayMsg}>
+                            {displayMsg}
                         </p>
                     </>
                 )}
@@ -348,7 +359,7 @@ const SortableBarChartStacked = ({ data, invalidLabel = 'Não Definidos', invali
                 </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px] max-h-[260px]">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px]">
                 {sortedData.length === 0 ? (
                     <div className="p-4 text-gray-400 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Nenhum registro validado.</div>
                 ) : (
@@ -390,7 +401,7 @@ const SortableBarChartStacked = ({ data, invalidLabel = 'Não Definidos', invali
             </div>
 
             <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 flex flex-wrap justify-between shrink-0 gap-2">
-                <span className="text-[8px] font-bold text-gray-400 uppercase">* Nota: Lideranças têm peso visual estratégico 10x maior que Leads.</span>
+                <span className="text-[8px] font-bold text-gray-400 uppercase">* Proporção baseada em cálculos estratégicos de peso.</span>
                 {invalidValue > 0 && <span className="text-[9px] font-bold text-gray-400 uppercase">{invalidLabel}: {invalidValue}</span>}
             </div>
         </div>
@@ -416,7 +427,7 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, invalid
                 </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px] max-h-[260px]">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px]">
                 {sortedData.length === 0 ? (
                     <div className="p-4 text-gray-400 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Nenhum registro validado.</div>
                 ) : (
@@ -663,7 +674,6 @@ const Dashboard = () => {
         return true;
     };
 
-    // Mapas de Localização para filtro de Leads (que não possuem região preenchida na planilha)
     const bairroToRegiao = useMemo(() => {
         const map = {};
         capital.forEach(c => { if (c.Bairro && c.Regiao) map[normalizeStr(c.Bairro)] = c.Regiao; });
@@ -681,7 +691,6 @@ const Dashboard = () => {
         estado.forEach(e => { if (e.Cidade && e.Regiao) map[normalizeStr(e.Cidade)] = e.Regiao; });
         return map;
     }, [estado]);
-
 
     const filteredEmendas = useMemo(() => emendas.filter(e => filterByTerritory(e.municipio) && (globalFilters.regioes.length === 0 || globalFilters.regioes.includes(e.regiao)) && (globalFilters.temas.length === 0 || globalFilters.temas.includes(e.tema))), [emendas, globalFilters, territoryScope, includeFloripa]);
     
@@ -717,35 +726,45 @@ const Dashboard = () => {
         setSelectedEntity({ type, name });
     };
 
-    const crossChartTemasLeads = useMemo(() => {
+    /* Gráficos Estratégicos Reorganizados */
+    
+    // 1. Relação entre votos e município ou distrito
+    const chartVotosLocal = useMemo(() => {
         const map = {}; let invalid = 0;
-        filteredLeads.forEach(l => {
-            const t = l.tema;
-            if (isInvalidData(t)) { invalid++; return; }
-            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
-            map[t].leads += 1;
-        });
-        filteredContatos.forEach(c => {
-            const t = c.tema;
-            if (isInvalidData(t)) { invalid++; return; }
-            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
-            map[t].liderancas += 1;
-        });
+        if (territoryScope === 'CAPITAL') {
+            capital.forEach(c => {
+                const key = c.Distrito || 'Não Informado';
+                if (key === 'Não Informado' || isInvalidData(key)) { invalid += c.Votos2024; return; }
+                if (!map[key]) map[key] = 0;
+                map[key] += c.Votos2024;
+            });
+        } else {
+            estado.forEach(e => {
+                if (isFloripa(e.Cidade) && !includeFloripa) return;
+                const key = e.Cidade || 'Não Informado';
+                if (key === 'Não Informado' || isInvalidData(key)) { invalid += e.Votos2022; return; }
+                if (!map[key]) map[key] = 0;
+                map[key] += e.Votos2022;
+            });
+        }
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
+    }, [estado, capital, territoryScope, includeFloripa]);
 
-        return { 
-            data: Object.entries(map).map(([name, counts]) => ({ 
-                name, 
-                value: 0, 
-                visualTotal: (counts.liderancas * 10) + counts.leads, 
-                segments: [
-                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
-                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
-                ]
-            })), 
-            invalid 
-        };
-    }, [filteredLeads, filteredContatos]);
+    // 2. Relação entre emendas e regiões
+    const chartEmendasRegiao = useMemo(() => {
+        const map = {}; let invalid = 0;
+        filteredEmendas.forEach(e => {
+            const r = e.regiao;
+            if (isInvalidData(r)) invalid += e.total;
+            else {
+                if (!map[r]) map[r] = 0;
+                map[r] += e.total;
+            }
+        });
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
+    }, [filteredEmendas]);
 
+    // 3. Relação entre emendas e temas
     const crossChartTemasEmendas = useMemo(() => {
         const map = {}; let invalid = 0;
         filteredEmendas.forEach(e => { 
@@ -755,82 +774,7 @@ const Dashboard = () => {
         return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
     }, [filteredEmendas]);
 
-    const crossChartArticuladores = useMemo(() => {
-        const map = {}; let invalid = 0;
-        [...filteredAgenda, ...filteredEmendas, ...filteredContatos].forEach(item => {
-            const a = item.articulador;
-            if (isInvalidData(a)) invalid++; 
-            else map[a] = (map[a] || 0) + 1;
-        });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
-    }, [filteredAgenda, filteredEmendas, filteredContatos]);
-
-    const crossChartLocaisEstado = useMemo(() => {
-        const map = {}; let invalid = 0;
-        [...filteredLeads, ...filteredContatos].forEach(item => {
-            if (!isFloripa(item.municipio) && !(item.base && item.base.includes('Florianópolis'))) {
-                const loc = item.municipio || item.municipio_bairro;
-                if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
-            }
-        });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
-    }, [filteredLeads, filteredContatos]);
-
-    const crossChartLocaisCapital = useMemo(() => {
-        const map = {}; let invalid = 0;
-        // Bairros da capital ignoram o switch 'includeFloripa' para montar o top 10, usa apenas a base
-        [...leads.filter(l => isFloripa(l.municipio)), ...contatos.filter(c => c.base.includes('Florianópolis'))].forEach(item => {
-            const loc = item.bairro || item.municipio_bairro;
-            if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
-        });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
-    }, [leads, contatos]);
-
-    const crossChartEngajamentoRegiao = useMemo(() => {
-        const map = {}; let invalid = 0;
-        
-        if (territoryScope === 'CAPITAL') {
-            filteredContatos.forEach(c => {
-                const r = c.regiao;
-                if (isInvalidData(r)) { invalid++; return; }
-                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
-                map[r].liderancas += 1;
-            });
-            filteredLeads.forEach(l => {
-                const r = bairroToRegiao[normalizeStr(l.bairro)];
-                if (isInvalidData(r)) { invalid++; return; }
-                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
-                map[r].leads += 1;
-            });
-        } else {
-            filteredContatos.forEach(c => {
-                const r = c.regiao;
-                if (isInvalidData(r)) { invalid++; return; }
-                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
-                map[r].liderancas += 1;
-            });
-            filteredLeads.forEach(l => {
-                const r = muniToRegiao[normalizeStr(l.municipio)];
-                if (isInvalidData(r)) { invalid++; return; }
-                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
-                map[r].leads += 1;
-            });
-        }
-
-        return { 
-            data: Object.entries(map).map(([name, counts]) => ({ 
-                name, 
-                value: 0, 
-                visualTotal: (counts.liderancas * 10) + counts.leads, 
-                segments: [
-                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
-                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
-                ]
-            })), 
-            invalid 
-        };
-    }, [filteredContatos, filteredLeads, territoryScope, bairroToRegiao, muniToRegiao]);
-
+    // 4. Relação entre votos, emendas e região
     const crossChartVotosEmendasRegiao = useMemo(() => {
         const map = {}; let invalid = 0;
         
@@ -878,6 +822,91 @@ const Dashboard = () => {
         };
     }, [estado, capital, filteredEmendas, territoryScope, includeFloripa]);
 
+    /* Gráficos Secundários de CRM */
+    const crossChartTemasLeads = useMemo(() => {
+        const map = {}; let invalid = 0;
+        filteredLeads.forEach(l => {
+            const t = l.tema;
+            if (isInvalidData(t)) { invalid++; return; }
+            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
+            map[t].leads += 1;
+        });
+        filteredContatos.forEach(c => {
+            const t = c.tema;
+            if (isInvalidData(t)) { invalid++; return; }
+            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
+            map[t].liderancas += 1;
+        });
+
+        return { 
+            data: Object.entries(map).map(([name, counts]) => ({ 
+                name, 
+                value: 0, 
+                visualTotal: (counts.liderancas * 10) + counts.leads, 
+                segments: [
+                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
+                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
+                ]
+            })), 
+            invalid 
+        };
+    }, [filteredLeads, filteredContatos]);
+
+    const crossChartArticuladores = useMemo(() => {
+        const map = {}; let invalid = 0;
+        [...filteredAgenda, ...filteredEmendas, ...filteredContatos].forEach(item => {
+            const a = item.articulador;
+            if (isInvalidData(a)) invalid++; 
+            else map[a] = (map[a] || 0) + 1;
+        });
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
+    }, [filteredAgenda, filteredEmendas, filteredContatos]);
+
+    const crossChartEngajamentoRegiao = useMemo(() => {
+        const map = {}; let invalid = 0;
+        
+        if (territoryScope === 'CAPITAL') {
+            filteredContatos.forEach(c => {
+                const r = c.regiao;
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].liderancas += 1;
+            });
+            filteredLeads.forEach(l => {
+                const r = bairroToRegiao[normalizeStr(l.bairro)];
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].leads += 1;
+            });
+        } else {
+            filteredContatos.forEach(c => {
+                const r = c.regiao;
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].liderancas += 1;
+            });
+            filteredLeads.forEach(l => {
+                const r = muniToRegiao[normalizeStr(l.municipio)];
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].leads += 1;
+            });
+        }
+
+        return { 
+            data: Object.entries(map).map(([name, counts]) => ({ 
+                name, 
+                value: 0, 
+                visualTotal: (counts.liderancas * 10) + counts.leads, 
+                segments: [
+                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
+                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
+                ]
+            })), 
+            invalid 
+        };
+    }, [filteredContatos, filteredLeads, territoryScope, bairroToRegiao, muniToRegiao]);
+
     return (
         <div className="space-y-6 md:space-y-8 w-full max-w-6xl mx-auto pb-12 animate-fade-in">
             {isMock && (
@@ -886,61 +915,46 @@ const Dashboard = () => {
                 </div>
             )}
             
+            {/* Gráficos Estratégicos Reorganizados */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-4 md:mt-8">
-                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[600px] md:max-h-[800px]">
-                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Engajamento vs Investimento (Temas)</h3>
-                    <div className="flex-1 space-y-6 overflow-hidden flex flex-col">
-                        <div className="flex-1 flex flex-col overflow-hidden">
-                            <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume de Contatos</p>
-                            <SortableBarChartStacked data={crossChartTemasLeads.data} isStacked={true} invalidValue={crossChartTemasLeads.invalid} onLabelClick={(t) => handleLabelClick('tema', t)} />
-                        </div>
-                        <div className="border-t-2 border-dashed border-gray-300 pt-4 flex-1 flex flex-col overflow-hidden">
-                            <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por R$ Destinado (Emendas)</p>
-                            <SortableBarChart data={crossChartTemasEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} invalidValue={crossChartTemasEmendas.invalid} onLabelClick={(t) => handleLabelClick('tema', t)} invalidLabel="S/ Tema Definido" />
-                        </div>
-                    </div>
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Votos por {territoryScope === 'CAPITAL' ? 'Distrito' : 'Município'}</h3>
+                     <SortableBarChart data={chartVotosLocal.data} colorClass="bg-[#C1272D]" invalidValue={chartVotosLocal.invalid} invalidLabel="Não Informado" onLabelClick={(t) => handleLabelClick(territoryScope === 'CAPITAL' ? 'distrito' : 'municipio', t)} />
                 </div>
-
-                <div className="flex flex-col gap-6 md:gap-8 max-h-[800px]">
-                    <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
-                        <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Performance Articuladores</h3>
-                        <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Agendas + Emendas + Lideranças</p>
-                        <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-[#C1272D]" invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" onLabelClick={(t) => handleLabelClick('articulador', t)} />
-                    </div>
-
-                    {(territoryScope === 'ALL' || territoryScope === 'INTERIOR') && (
-                        <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
-                            <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Top Municípios SC</h3>
-                            <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Lideranças + Leads</p>
-                            <SortableBarChart data={crossChartLocaisEstado.data} colorClass="bg-[#007D8A]" invalidValue={crossChartLocaisEstado.invalid} invalidLabel="Local Não Informado" onLabelClick={(t) => handleLabelClick('municipio', t)} />
-                        </div>
-                    )}
-
-                    {(territoryScope === 'CAPITAL') && (
-                        <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
-                            <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Top Bairros Floripa</h3>
-                            <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Lideranças + Leads</p>
-                            <SortableBarChart data={crossChartLocaisCapital.data} colorClass="bg-black" invalidValue={crossChartLocaisCapital.invalid} invalidLabel="Local Não Informado" onLabelClick={(t) => handleLabelClick('bairro', t)} />
-                        </div>
-                    )}
+                
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Emendas por Região</h3>
+                     <SortableBarChart data={chartEmendasRegiao.data} colorClass="bg-[#007D8A]" valueFormatter={formatCurrency} invalidValue={chartEmendasRegiao.invalid} invalidLabel="Região Não Informada" onLabelClick={(t) => handleLabelClick('regiao', t)} />
+                </div>
+                
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Emendas por Tema</h3>
+                     <SortableBarChart data={crossChartTemasEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} invalidValue={crossChartTemasEmendas.invalid} invalidLabel="S/ Tema Definido" onLabelClick={(t) => handleLabelClick('tema', t)} />
+                </div>
+                
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Votos vs Emendas (Regiões)</h3>
+                     <SortableBarChartStacked data={crossChartVotosEmendasRegiao.data} invalidValue={crossChartVotosEmendasRegiao.invalid} invalidLabel="Emendas sem Região" onLabelClick={(t) => handleLabelClick('regiao', t)} legend1="Votos" color1="bg-[#C1272D]" legend2="Emendas (R$)" color2="bg-[#EAA221]" />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-6 md:mt-8">
-                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[800px]">
-                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Engajamento por Região</h3>
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                         <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume de Lideranças + Leads</p>
-                         <SortableBarChartStacked data={crossChartEngajamentoRegiao.data} invalidValue={crossChartEngajamentoRegiao.invalid} invalidLabel="Região Não Mapeada" onLabelClick={(t) => handleLabelClick('regiao', t)} legend1="Lideranças" color1="bg-[#C1272D]" legend2="Leads" color2="bg-black" />
-                    </div>
+            {/* Subseção Secundária (CRM) */}
+            <div className="mt-12 mb-4 border-t-4 border-black pt-6">
+                <h2 className="text-xl font-black uppercase tracking-tighter">Métricas Auxiliares de Engajamento</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-4">
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Lideranças + Leads (Temas)</h3>
+                    <SortableBarChartStacked data={crossChartTemasLeads.data} isStacked={true} invalidValue={crossChartTemasLeads.invalid} onLabelClick={(t) => handleLabelClick('tema', t)} />
                 </div>
-
-                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[800px]">
-                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Votos vs Emendas (Regiões SC)</h3>
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                         <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Comparativo por Região do Estado</p>
-                         <SortableBarChartStacked data={crossChartVotosEmendasRegiao.data} invalidValue={crossChartVotosEmendasRegiao.invalid} invalidLabel="Emendas sem Região" onLabelClick={(t) => handleLabelClick('regiao', t)} legend1="Votos" color1="bg-[#C1272D]" legend2="Emendas (R$)" color2="bg-[#EAA221]" />
-                    </div>
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Performance Articuladores</h3>
+                    <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-black" invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" onLabelClick={(t) => handleLabelClick('articulador', t)} />
+                </div>
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px] lg:col-span-2">
+                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Lideranças + Leads (Regiões)</h3>
+                    <SortableBarChartStacked data={crossChartEngajamentoRegiao.data} invalidValue={crossChartEngajamentoRegiao.invalid} invalidLabel="Região Não Mapeada" onLabelClick={(t) => handleLabelClick('regiao', t)} legend1="Lideranças" color1="bg-[#C1272D]" legend2="Leads" color2="bg-black" />
                 </div>
             </div>
         </div>
@@ -1488,56 +1502,57 @@ const GlobalStats = () => {
 
     return (
         <div className="space-y-4 md:space-y-6 mb-6">
-            {isMock && (
-                <div className="bg-black text-white p-4 font-black uppercase text-xs flex items-center border-4 border-[#EAA221] shadow-[4px_4px_0_0_#EAA221]">
-                    ⚠️ Demonstração visual (Variáveis não detectadas). Configure as URLs no Vercel para ver dados reais.
-                </div>
-            )}
-            
-            <div className={`text-white border-4 border-black p-4 sm:p-6 shadow-[6px_6px_0px_0px_#111111] flex flex-col ${isFiltroCapital ? 'bg-[#007D8A]' : 'bg-[#EAA221] text-black'}`}>
-                <div className="flex justify-between items-start">
-                    <span className={`text-[10px] font-black uppercase tracking-widest block mb-4 ${isFiltroCapital ? 'text-white/70' : 'text-black/70'}`}>Evolução de Votos ({isFiltroCapital ? 'Capital' : 'SC'})</span>
-                    {!isFiltroCapital && (
-                        <span className={`text-[8px] font-bold uppercase px-2 py-1 border ${includeFloripa ? 'border-black text-black' : 'border-black/30 text-black/50'}`}>
-                            {includeFloripa ? '(Incluindo Floripa)' : '(Omitindo Floripa)'}
-                        </span>
-                    )}
-                </div>
-                <div className="flex items-end gap-4 sm:gap-6">
-                    <div className="flex flex-col">
-                        <span className="text-xs sm:text-sm font-bold opacity-80">{statsVotos.lblAntigo}</span>
-                        <span className="text-2xl sm:text-3xl font-black">{statsVotos.vAntigo.toLocaleString()}</span>
+            {/* O novo Layout 5 Colunas (5 blocos na mesma linha para lg screens) */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
+                
+                <div className={`col-span-2 lg:col-span-1 border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between ${isFiltroCapital ? 'bg-[#007D8A] text-white' : 'bg-[#EAA221] text-black'}`}>
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center ${isFiltroCapital ? 'opacity-80' : 'opacity-70'}`}>
+                                Evolução ({isFiltroCapital ? 'Capital' : 'SC'})
+                            </span>
+                            {!isFiltroCapital && (
+                                <span className={`text-[8px] font-bold uppercase px-1 py-0.5 border ${includeFloripa ? 'border-black text-black' : 'border-black/50 text-black/70'}`}>
+                                    {includeFloripa ? 'Incluindo Floripa' : 'Ocultando Floripa'}
+                                </span>
+                            )}
+                        </div>
                     </div>
-                    <div className="text-lg sm:text-xl font-black opacity-50 mb-1">&rarr;</div>
-                    <div className="flex flex-col">
-                        <span className={`text-xs sm:text-sm font-black px-1 w-fit border-2 border-black ${isFiltroCapital ? 'bg-white text-[#007D8A]' : 'bg-black text-[#EAA221]'}`}>{statsVotos.lblNovo}</span>
-                        <span className="text-4xl sm:text-5xl font-black">{statsVotos.vNovo.toLocaleString()}</span>
+                    <div className="flex items-end gap-1 sm:gap-2">
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-bold opacity-80">{statsVotos.lblAntigo}</span>
+                            <span className="text-lg sm:text-xl font-black leading-none">{statsVotos.vAntigo.toLocaleString()}</span>
+                        </div>
+                        <div className="text-sm font-black opacity-50 mb-0.5">&rarr;</div>
+                        <div className="flex flex-col">
+                            <span className={`text-[9px] font-black px-1 border border-current w-fit leading-none mb-0.5 ${isFiltroCapital ? 'bg-white text-[#007D8A]' : 'bg-black text-[#EAA221]'}`}>{statsVotos.lblNovo}</span>
+                            <span className="text-xl sm:text-2xl font-black leading-none">{statsVotos.vNovo.toLocaleString()}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Briefcase /><span className="ml-1 sm:ml-2">Lideranças (CRM)</span></h3>
-                    <div className="text-3xl sm:text-4xl font-black text-[#C1272D]">{targetContatos.length}</div>
-                    <div className="h-2 w-full bg-black mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Briefcase /><span className="ml-1">Lideranças</span></h3>
+                    <div className="text-2xl sm:text-3xl font-black text-[#C1272D]">{targetContatos.length}</div>
+                    <div className="h-1.5 w-full bg-black mt-2 border border-black"></div>
                 </div>
+                
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Users /><span className="ml-1 sm:ml-2">Leads (Eventos)</span></h3>
-                    <div className="text-3xl sm:text-4xl font-black">{targetLeads.length}</div>
-                    <div className="h-2 w-full bg-[#007D8A] mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Users /><span className="ml-1">Leads (Eventos)</span></h3>
+                    <div className="text-2xl sm:text-3xl font-black">{targetLeads.length}</div>
+                    <div className="h-1.5 w-full bg-[#007D8A] mt-2 border border-black"></div>
                 </div>
+                
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between overflow-hidden">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.FileText /><span className="ml-1 sm:ml-2">Emendas</span></h3>
-                    <div className="text-lg sm:text-2xl font-black truncate" title={formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}>{formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}</div>
-                    <div className="text-[9px] sm:text-[10px] font-bold mt-1 text-gray-400 uppercase">{targetEmendas.length} Ocorrências</div>
-                    <div className="h-2 w-full bg-[#EAA221] mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.FileText /><span className="ml-1">Emendas</span></h3>
+                    <div className="text-xl sm:text-2xl font-black truncate" title={formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}>{formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}</div>
+                    <div className="h-1.5 w-full bg-[#EAA221] mt-2 border border-black"></div>
                 </div>
+                
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-1 sm:ml-2">Agendas</span></h3>
-                    <div className="text-3xl sm:text-4xl font-black">{agendasFuturas} <span className="text-xl sm:text-2xl text-gray-400">/ {targetAgenda.length}</span></div>
-                    <div className="text-[9px] sm:text-[10px] font-bold mt-1 text-gray-400 uppercase">Futuras / Totais</div>
-                    <div className="h-2 w-full bg-[#C1272D] mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-1">Agendas</span></h3>
+                    <div className="text-2xl sm:text-3xl font-black">{agendasFuturas} <span className="text-lg sm:text-xl text-gray-400">/ {targetAgenda.length}</span></div>
+                    <div className="h-1.5 w-full bg-[#C1272D] mt-2 border border-black"></div>
                 </div>
             </div>
         </div>
