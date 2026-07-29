@@ -217,7 +217,6 @@ const AppProvider = ({ children }) => {
                     const bairro = (a['Bairro'] || a['bairro'] || '').trim();
                     const local = (a['Local'] || '').trim();
                     
-                    // Fallback para capital
                     if (!mun && (normalizeStr(bairro).includes('centro') || normalizeStr(local).includes('alesc') || normalizeStr(local).includes('florianopolis'))) {
                         mun = 'Florianópolis';
                     }
@@ -266,7 +265,6 @@ const AppProvider = ({ children }) => {
     );
 };
 
-// Componente Exclusivo de Carregamento com Frases Rotativas
 const LoadingScreen = ({ loadingInfo }) => {
     const messages = [
         "Você pode visualizar os dados de Santa Catarina com ou sem os números da Capital.",
@@ -278,18 +276,22 @@ const LoadingScreen = ({ loadingInfo }) => {
     const [displayMsg, setDisplayMsg] = useState("Isto pode levar alguns minutos, aguarde.");
     const [isNewSheet, setIsNewSheet] = useState(false);
 
+    // Identifica e reage sempre que o estágio de carregamento muda
     useEffect(() => {
         if (loadingInfo.progress > 0 && loadingInfo.progress < 100) {
             setDisplayMsg("Carregando nova planilha, aguarde.");
             setIsNewSheet(true);
+            
             const timer = setTimeout(() => {
                 setIsNewSheet(false);
                 setDisplayMsg(messages[Math.floor(Math.random() * messages.length)]);
             }, 3000);
+            
             return () => clearTimeout(timer);
         }
     }, [loadingInfo.stage]);
 
+    // Rotação aleatória de mensagens de contexto
     useEffect(() => {
         let interval;
         if (!isNewSheet && loadingInfo.progress > 0 && loadingInfo.progress < 100) {
@@ -334,16 +336,6 @@ const LoadingScreen = ({ loadingInfo }) => {
     );
 };
 
-const DimensionSelect = ({ value, onChange, options }) => (
-    <select
-        className="ml-2 bg-transparent text-current cursor-pointer outline-none font-black uppercase text-[10px] md:text-xs border-b-2 border-current hover:bg-black/10 transition-colors"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-    >
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-);
-
 const SortableBarChartStacked = ({ data, invalidLabel = 'Não Definidos', invalidValue = 0, onLabelClick, legend1="Lideranças", color1="bg-[#C1272D]", legend2="Leads", color2="bg-black" }) => {
     const [sortDesc, setSortDesc] = useState(true);
 
@@ -367,7 +359,7 @@ const SortableBarChartStacked = ({ data, invalidLabel = 'Não Definidos', invali
                 </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px] max-h-[260px]">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px]">
                 {sortedData.length === 0 ? (
                     <div className="p-4 text-gray-400 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Nenhum registro validado.</div>
                 ) : (
@@ -409,7 +401,7 @@ const SortableBarChartStacked = ({ data, invalidLabel = 'Não Definidos', invali
             </div>
 
             <div className="mt-4 pt-2 border-t-2 border-dashed border-gray-300 flex flex-wrap justify-between shrink-0 gap-2">
-                <span className="text-[8px] font-bold text-gray-400 uppercase">* Nota: Lideranças têm peso visual estratégico 10x maior que Leads.</span>
+                <span className="text-[8px] font-bold text-gray-400 uppercase">* Proporção baseada em cálculos estratégicos de peso.</span>
                 {invalidValue > 0 && <span className="text-[9px] font-bold text-gray-400 uppercase">{invalidLabel}: {invalidValue}</span>}
             </div>
         </div>
@@ -435,7 +427,7 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, invalid
                 </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px] max-h-[260px]">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar min-h-[150px]">
                 {sortedData.length === 0 ? (
                     <div className="p-4 text-gray-400 font-bold text-sm uppercase text-center border-2 border-dashed border-gray-300">Nenhum registro validado.</div>
                 ) : (
@@ -561,14 +553,12 @@ const Sidebar = () => {
             </div>
 
             <div className={`fixed inset-y-0 left-0 transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:relative md:translate-x-0 transition duration-200 ease-in-out w-80 bg-[#FDFBF7] border-r-4 border-black flex flex-col z-40 h-full shadow-2xl md:shadow-none`}>
-                <div className="hidden md:flex flex-row p-6 border-b-4 border-black bg-[#EAA221] cursor-pointer items-center gap-4" onClick={() => {setSelectedEntity(null); setMainView('dashboard');}}>
-                    <img src="https://raw.githubusercontent.com/killuixo/tabulum-central/refs/heads/main/icon-192.png" alt="icon" className="w-16 h-16 object-contain shrink-0" />
-                    <div className="flex flex-col justify-center">
-                        <h1 className="text-3xl font-black text-black tracking-tighter uppercase leading-none">
-                            TABULUM
-                        </h1>
-                        <p className="text-[10px] font-black tracking-widest uppercase mt-1 text-black leading-tight">Central de<br/>Inteligência</p>
-                    </div>
+                <div className="hidden md:block p-6 border-b-4 border-black bg-[#EAA221] cursor-pointer" onClick={() => {setSelectedEntity(null); setMainView('dashboard');}}>
+                    <h1 className="text-3xl font-black text-black tracking-tighter uppercase leading-none flex items-center gap-2">
+                        <img src="https://raw.githubusercontent.com/killuixo/tabulum-central/refs/heads/main/icon-192.png" alt="icon" className="w-8 h-8 object-contain" />
+                        TABULUM
+                    </h1>
+                    <p className="text-[10px] font-black tracking-widest uppercase mt-1 text-black">Central de Inteligência</p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar">
@@ -677,20 +667,6 @@ const Sidebar = () => {
 const Dashboard = () => {
     const { leads, emendas, agenda, contatos, estado, capital, globalFilters, territoryScope, includeFloripa, isMock, setSelectedEntity } = useContext(AppContext);
 
-    const [globalDim, setGlobalDim] = useState('');
-    const [dimBox1, setDimBox1] = useState('tema');
-    const [dimBox3, setDimBox3] = useState(territoryScope === 'CAPITAL' ? 'bairro' : 'municipio');
-    const [dimBox4, setDimBox4] = useState('regiao');
-    const [dimBox5, setDimBox5] = useState('regiao');
-
-    useEffect(() => {
-        setGlobalDim('');
-        setDimBox1('tema');
-        setDimBox3(territoryScope === 'CAPITAL' ? 'bairro' : 'municipio');
-        setDimBox4('regiao');
-        setDimBox5('regiao');
-    }, [territoryScope]);
-
     const filterByTerritory = (mun) => {
         const isF = isFloripa(mun);
         if (territoryScope === 'CAPITAL') return isF;
@@ -698,7 +674,6 @@ const Dashboard = () => {
         return true;
     };
 
-    // Mapas de Localização para filtro de Leads (que não possuem região preenchida na planilha)
     const bairroToRegiao = useMemo(() => {
         const map = {};
         capital.forEach(c => { if (c.Bairro && c.Regiao) map[normalizeStr(c.Bairro)] = c.Regiao; });
@@ -716,7 +691,6 @@ const Dashboard = () => {
         estado.forEach(e => { if (e.Cidade && e.Regiao) map[normalizeStr(e.Cidade)] = e.Regiao; });
         return map;
     }, [estado]);
-
 
     const filteredEmendas = useMemo(() => emendas.filter(e => filterByTerritory(e.municipio) && (globalFilters.regioes.length === 0 || globalFilters.regioes.includes(e.regiao)) && (globalFilters.temas.length === 0 || globalFilters.temas.includes(e.tema))), [emendas, globalFilters, territoryScope, includeFloripa]);
     
@@ -752,158 +726,62 @@ const Dashboard = () => {
         setSelectedEntity({ type, name });
     };
 
-    // Lógica Dinâmica para os Seletores
-    const optGeneral = territoryScope === 'CAPITAL'
-        ? [{value:'tema', label:'Tema'}, {value:'bairro', label:'Bairro'}, {value:'distrito', label:'Distrito'}, {value:'regiao', label:'Região'}]
-        : [{value:'tema', label:'Tema'}, {value:'municipio', label:'Município'}, {value:'regiao', label:'Região'}];
-
-    const optVotos = territoryScope === 'CAPITAL'
-        ? [{value:'bairro', label:'Bairro'}, {value:'distrito', label:'Distrito'}, {value:'regiao', label:'Região'}]
-        : [{value:'municipio', label:'Município'}, {value:'regiao', label:'Região'}];
-
-    const validForVotos = ['municipio', 'regiao', 'distrito', 'bairro'];
+    /* Gráficos Estratégicos Reorganizados */
     
-    const effDimBox1 = globalDim || dimBox1;
-    const effDimBox3 = globalDim || dimBox3;
-    const effDimBox4 = globalDim || dimBox4;
-    const effDimBox5 = globalDim && validForVotos.includes(globalDim) ? globalDim : dimBox5;
-
-    const getDimEmenda = (e, dim) => {
-        if (dim === 'tema') return e.tema;
-        if (dim === 'regiao') return e.regiao;
-        if (dim === 'municipio' || dim === 'bairro' || dim === 'distrito') return e.municipio;
-        return 'Não Informado';
-    };
-
-    const getDimLead = (l, dim) => {
-        if (dim === 'tema') return l.tema;
-        if (dim === 'municipio') return l.municipio;
-        if (dim === 'bairro') return l.bairro || l.municipio;
-        if (dim === 'regiao') return territoryScope === 'CAPITAL' ? bairroToRegiao[normalizeStr(l.bairro)] : muniToRegiao[normalizeStr(l.municipio)];
-        if (dim === 'distrito') return bairroToDistrito[normalizeStr(l.bairro)];
-        return 'Não Informado';
-    };
-
-    const getDimContato = (c, dim) => {
-        if (dim === 'tema') return c.tema;
-        if (dim === 'municipio') return c.municipio_bairro;
-        if (dim === 'bairro') return c.municipio_bairro;
-        if (dim === 'regiao') return c.regiao;
-        if (dim === 'distrito') return c.distrito;
-        return 'Não Informado';
-    };
-
-    const getDimVoto = (item, dim) => {
-         if (dim === 'municipio') return item.Cidade;
-         if (dim === 'bairro') return item.Bairro;
-         if (dim === 'distrito') return item.Distrito;
-         if (dim === 'regiao') return item.Regiao || item['Região do Estado'] || item['Região'];
-         return 'Não Informado';
-    };
-
-    const crossChartEngajInvestLeads = useMemo(() => {
+    // 1. Relação entre votos e município ou distrito
+    const chartVotosLocal = useMemo(() => {
         const map = {}; let invalid = 0;
-        filteredLeads.forEach(l => {
-            const v = getDimLead(l, effDimBox1);
-            if (isInvalidData(v)) { invalid++; return; }
-            if(!map[v]) map[v] = { liderancas: 0, leads: 0 };
-            map[v].leads += 1;
-        });
-        filteredContatos.forEach(c => {
-            const v = getDimContato(c, effDimBox1);
-            if (isInvalidData(v)) { invalid++; return; }
-            if(!map[v]) map[v] = { liderancas: 0, leads: 0 };
-            map[v].liderancas += 1;
-        });
+        if (territoryScope === 'CAPITAL') {
+            capital.forEach(c => {
+                const key = c.Distrito || 'Não Informado';
+                if (key === 'Não Informado' || isInvalidData(key)) { invalid += c.Votos2024; return; }
+                if (!map[key]) map[key] = 0;
+                map[key] += c.Votos2024;
+            });
+        } else {
+            estado.forEach(e => {
+                if (isFloripa(e.Cidade) && !includeFloripa) return;
+                const key = e.Cidade || 'Não Informado';
+                if (key === 'Não Informado' || isInvalidData(key)) { invalid += e.Votos2022; return; }
+                if (!map[key]) map[key] = 0;
+                map[key] += e.Votos2022;
+            });
+        }
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
+    }, [estado, capital, territoryScope, includeFloripa]);
 
-        return { 
-            data: Object.entries(map).map(([name, counts]) => ({ 
-                name, 
-                value: 0, 
-                visualTotal: (counts.liderancas * 10) + counts.leads, 
-                segments: [
-                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
-                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
-                ]
-            })), 
-            invalid 
-        };
-    }, [filteredLeads, filteredContatos, effDimBox1, territoryScope, bairroToRegiao, muniToRegiao, bairroToDistrito]);
+    // 2. Relação entre emendas e regiões
+    const chartEmendasRegiao = useMemo(() => {
+        const map = {}; let invalid = 0;
+        filteredEmendas.forEach(e => {
+            const r = e.regiao;
+            if (isInvalidData(r)) invalid += e.total;
+            else {
+                if (!map[r]) map[r] = 0;
+                map[r] += e.total;
+            }
+        });
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
+    }, [filteredEmendas]);
 
-    const crossChartEngajInvestEmendas = useMemo(() => {
+    // 3. Relação entre emendas e temas
+    const crossChartTemasEmendas = useMemo(() => {
         const map = {}; let invalid = 0;
         filteredEmendas.forEach(e => { 
-            const v = getDimEmenda(e, effDimBox1);
-            if (isInvalidData(v)) invalid += e.total; else map[v] = (map[v] || 0) + e.total; 
+            const t = e.tema;
+            if (isInvalidData(t)) invalid += e.total; else map[t] = (map[t] || 0) + e.total; 
         });
         return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
-    }, [filteredEmendas, effDimBox1]);
+    }, [filteredEmendas]);
 
-    const crossChartArticuladores = useMemo(() => {
-        const map = {}; let invalid = 0;
-        [...filteredAgenda, ...filteredEmendas, ...filteredContatos].forEach(item => {
-            const a = item.articulador;
-            if (isInvalidData(a)) invalid++; 
-            else map[a] = (map[a] || 0) + 1;
-        });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
-    }, [filteredAgenda, filteredEmendas, filteredContatos]);
-
-    const crossChartTopLocais = useMemo(() => {
-        const map = {}; let invalid = 0;
-        filteredLeads.forEach(l => {
-            if (territoryScope === 'CAPITAL' && !isFloripa(l.municipio)) return;
-            if (territoryScope === 'INTERIOR' && isFloripa(l.municipio) && !includeFloripa) return;
-            const loc = getDimLead(l, effDimBox3);
-            if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
-        });
-        filteredContatos.forEach(c => {
-            if (territoryScope === 'CAPITAL' && !c.base.includes('Florianópolis')) return;
-            if (territoryScope === 'INTERIOR' && c.base.includes('Florianópolis') && !includeFloripa) return;
-            const loc = getDimContato(c, effDimBox3);
-            if (isInvalidData(loc)) invalid++; else map[loc] = (map[loc] || 0) + 1;
-        });
-        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
-    }, [filteredLeads, filteredContatos, effDimBox3, territoryScope, includeFloripa, bairroToRegiao, muniToRegiao, bairroToDistrito]);
-
-    const crossChartEngajamentoDim = useMemo(() => {
-        const map = {}; let invalid = 0;
-        
-        filteredContatos.forEach(c => {
-            const r = getDimContato(c, effDimBox4);
-            if (isInvalidData(r)) { invalid++; return; }
-            if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
-            map[r].liderancas += 1;
-        });
-        filteredLeads.forEach(l => {
-            const r = getDimLead(l, effDimBox4);
-            if (isInvalidData(r)) { invalid++; return; }
-            if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
-            map[r].leads += 1;
-        });
-
-        return { 
-            data: Object.entries(map).map(([name, counts]) => ({ 
-                name, 
-                value: 0, 
-                visualTotal: (counts.liderancas * 10) + counts.leads, 
-                segments: [
-                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
-                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
-                ]
-            })), 
-            invalid 
-        };
-    }, [filteredContatos, filteredLeads, effDimBox4, territoryScope, bairroToRegiao, muniToRegiao]);
-
-    const crossChartVotosEmendasDim = useMemo(() => {
+    // 4. Relação entre votos, emendas e região
+    const crossChartVotosEmendasRegiao = useMemo(() => {
         const map = {}; let invalid = 0;
         
         if (territoryScope === 'ALL' || territoryScope === 'INTERIOR') {
             estado.forEach(e => {
                 if (isFloripa(e.Cidade) && !includeFloripa) return;
-                const r = getDimVoto(e, effDimBox5);
-                if (isInvalidData(r)) return; 
+                const r = e.Regiao || 'Não Informado';
                 if (!map[r]) map[r] = { votos: 0, emendas: 0 };
                 map[r].votos += e.Votos2022 || 0;
             });
@@ -911,8 +789,7 @@ const Dashboard = () => {
         if (territoryScope === 'ALL' || territoryScope === 'CAPITAL') {
             if (territoryScope === 'CAPITAL' || includeFloripa) {
                 capital.forEach(c => {
-                    const r = getDimVoto(c, effDimBox5);
-                    if (isInvalidData(r)) return;
+                    const r = c.Regiao || 'Não Informado';
                     if (!map[r]) map[r] = { votos: 0, emendas: 0 };
                     map[r].votos += c.Votos2022 || 0; 
                 });
@@ -920,7 +797,7 @@ const Dashboard = () => {
         }
 
         filteredEmendas.forEach(e => {
-            const r = getDimEmenda(e, effDimBox5);
+            const r = e.regiao;
             if (isInvalidData(r)) invalid += e.total; 
             else {
                 if (!map[r]) map[r] = { votos: 0, emendas: 0 };
@@ -943,7 +820,92 @@ const Dashboard = () => {
             })), 
             invalid 
         };
-    }, [estado, capital, filteredEmendas, territoryScope, includeFloripa, effDimBox5]);
+    }, [estado, capital, filteredEmendas, territoryScope, includeFloripa]);
+
+    /* Gráficos Secundários de CRM */
+    const crossChartTemasLeads = useMemo(() => {
+        const map = {}; let invalid = 0;
+        filteredLeads.forEach(l => {
+            const t = l.tema;
+            if (isInvalidData(t)) { invalid++; return; }
+            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
+            map[t].leads += 1;
+        });
+        filteredContatos.forEach(c => {
+            const t = c.tema;
+            if (isInvalidData(t)) { invalid++; return; }
+            if(!map[t]) map[t] = { liderancas: 0, leads: 0 };
+            map[t].liderancas += 1;
+        });
+
+        return { 
+            data: Object.entries(map).map(([name, counts]) => ({ 
+                name, 
+                value: 0, 
+                visualTotal: (counts.liderancas * 10) + counts.leads, 
+                segments: [
+                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
+                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
+                ]
+            })), 
+            invalid 
+        };
+    }, [filteredLeads, filteredContatos]);
+
+    const crossChartArticuladores = useMemo(() => {
+        const map = {}; let invalid = 0;
+        [...filteredAgenda, ...filteredEmendas, ...filteredContatos].forEach(item => {
+            const a = item.articulador;
+            if (isInvalidData(a)) invalid++; 
+            else map[a] = (map[a] || 0) + 1;
+        });
+        return { data: Object.entries(map).map(([name, value]) => ({ name, value, visualTotal: value })), invalid };
+    }, [filteredAgenda, filteredEmendas, filteredContatos]);
+
+    const crossChartEngajamentoRegiao = useMemo(() => {
+        const map = {}; let invalid = 0;
+        
+        if (territoryScope === 'CAPITAL') {
+            filteredContatos.forEach(c => {
+                const r = c.regiao;
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].liderancas += 1;
+            });
+            filteredLeads.forEach(l => {
+                const r = bairroToRegiao[normalizeStr(l.bairro)];
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].leads += 1;
+            });
+        } else {
+            filteredContatos.forEach(c => {
+                const r = c.regiao;
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].liderancas += 1;
+            });
+            filteredLeads.forEach(l => {
+                const r = muniToRegiao[normalizeStr(l.municipio)];
+                if (isInvalidData(r)) { invalid++; return; }
+                if(!map[r]) map[r] = { liderancas: 0, leads: 0 };
+                map[r].leads += 1;
+            });
+        }
+
+        return { 
+            data: Object.entries(map).map(([name, counts]) => ({ 
+                name, 
+                value: 0, 
+                visualTotal: (counts.liderancas * 10) + counts.leads, 
+                segments: [
+                    { value: counts.liderancas, visualValue: counts.liderancas * 10, colorClass: 'bg-[#C1272D]', label: 'Lideranças' },
+                    { value: counts.leads, visualValue: counts.leads, colorClass: 'bg-black', label: 'Leads' }
+                ]
+            })), 
+            invalid 
+        };
+    }, [filteredContatos, filteredLeads, territoryScope, bairroToRegiao, muniToRegiao]);
 
     return (
         <div className="space-y-6 md:space-y-8 w-full max-w-6xl mx-auto pb-12 animate-fade-in">
@@ -952,79 +914,47 @@ const Dashboard = () => {
                     ⚠️ Demonstração visual (Variáveis não detectadas). Configure as URLs no Vercel para ver dados reais.
                 </div>
             )}
-
-            <div className="bg-[#111111] text-white p-4 md:p-6 border-4 border-black shadow-[6px_6px_0_0_#EAA221] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex flex-col">
-                    <h2 className="text-base md:text-lg font-black uppercase tracking-widest text-[#EAA221]">Visualização Universal</h2>
-                    <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase mt-1">Sincronize todos os gráficos abaixo para um único critério de leitura.</p>
+            
+            {/* Gráficos Estratégicos Reorganizados */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-4 md:mt-8">
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Votos por {territoryScope === 'CAPITAL' ? 'Distrito' : 'Município'}</h3>
+                     <SortableBarChart data={chartVotosLocal.data} colorClass="bg-[#C1272D]" invalidValue={chartVotosLocal.invalid} invalidLabel="Não Informado" onLabelClick={(t) => handleLabelClick(territoryScope === 'CAPITAL' ? 'distrito' : 'municipio', t)} />
                 </div>
-                <select
-                    className="bg-white text-black cursor-pointer outline-none font-black uppercase text-xs md:text-sm p-3 border-4 border-black hover:bg-gray-200 transition-colors w-full md:w-auto"
-                    value={globalDim}
-                    onChange={(e) => setGlobalDim(e.target.value)}
-                >
-                    <option value="">Análises Individuais (Misto)</option>
-                    {optGeneral.map(o => <option key={o.value} value={o.value}>Agrupar tudo por {o.label}</option>)}
-                </select>
+                
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Emendas por Região</h3>
+                     <SortableBarChart data={chartEmendasRegiao.data} colorClass="bg-[#007D8A]" valueFormatter={formatCurrency} invalidValue={chartEmendasRegiao.invalid} invalidLabel="Região Não Informada" onLabelClick={(t) => handleLabelClick('regiao', t)} />
+                </div>
+                
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Emendas por Tema</h3>
+                     <SortableBarChart data={crossChartTemasEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} invalidValue={crossChartTemasEmendas.invalid} invalidLabel="S/ Tema Definido" onLabelClick={(t) => handleLabelClick('tema', t)} />
+                </div>
+                
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                     <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Votos vs Emendas (Regiões)</h3>
+                     <SortableBarChartStacked data={crossChartVotosEmendasRegiao.data} invalidValue={crossChartVotosEmendasRegiao.invalid} invalidLabel="Emendas sem Região" onLabelClick={(t) => handleLabelClick('regiao', t)} legend1="Votos" color1="bg-[#C1272D]" legend2="Emendas (R$)" color2="bg-[#EAA221]" />
+                </div>
+            </div>
+
+            {/* Subseção Secundária (CRM) */}
+            <div className="mt-12 mb-4 border-t-4 border-black pt-6">
+                <h2 className="text-xl font-black uppercase tracking-tighter">Métricas Auxiliares de Engajamento</h2>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-4 md:mt-8">
-                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[600px] md:max-h-[800px]">
-                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                        <span>Engaj. vs Invest.</span>
-                        <DimensionSelect value={effDimBox1} onChange={setDimBox1} options={optGeneral} />
-                    </h3>
-                    <div className="flex-1 space-y-6 overflow-hidden flex flex-col">
-                        <div className="flex-1 flex flex-col overflow-hidden">
-                            <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume de Contatos</p>
-                            <SortableBarChartStacked data={crossChartEngajInvestLeads.data} isStacked={true} invalidValue={crossChartEngajInvestLeads.invalid} onLabelClick={(t) => handleLabelClick(effDimBox1, t)} />
-                        </div>
-                        <div className="border-t-2 border-dashed border-gray-300 pt-4 flex-1 flex flex-col overflow-hidden">
-                            <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por R$ Destinado (Emendas)</p>
-                            <SortableBarChart data={crossChartEngajInvestEmendas.data} colorClass="bg-[#EAA221]" valueFormatter={formatCurrency} invalidValue={crossChartEngajInvestEmendas.invalid} onLabelClick={(t) => handleLabelClick(effDimBox1, t)} invalidLabel="S/ Critério Definido" />
-                        </div>
-                    </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-4">
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Lideranças + Leads (Temas)</h3>
+                    <SortableBarChartStacked data={crossChartTemasLeads.data} isStacked={true} invalidValue={crossChartTemasLeads.invalid} onLabelClick={(t) => handleLabelClick('tema', t)} />
                 </div>
-
-                <div className="flex flex-col gap-6 md:gap-8 max-h-[800px]">
-                    <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
-                        <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Performance Articuladores</h3>
-                        <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">(números de emendas, instituições, lideranças, agenda)</p>
-                        <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-[#C1272D]" invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" onLabelClick={(t) => handleLabelClick('articulador', t)} />
-                    </div>
-
-                    <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col flex-1 overflow-hidden min-h-[300px]">
-                        <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                            <span>Top Destaques</span>
-                            <DimensionSelect value={effDimBox3} onChange={setDimBox3} options={optGeneral} />
-                        </h3>
-                        <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase shrink-0 mb-2">Lideranças + Leads</p>
-                        <SortableBarChart data={crossChartTopLocais.data} colorClass={territoryScope === 'CAPITAL' ? "bg-black" : "bg-[#007D8A]"} invalidValue={crossChartTopLocais.invalid} invalidLabel="Local Não Informado" onLabelClick={(t) => handleLabelClick(effDimBox3, t)} />
-                    </div>
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px]">
+                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-2 shrink-0">Performance Articuladores</h3>
+                    <SortableBarChart data={crossChartArticuladores.data} colorClass="bg-black" invalidValue={crossChartArticuladores.invalid} invalidLabel="S/ Articulador Mapeado" onLabelClick={(t) => handleLabelClick('articulador', t)} />
                 </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-6 md:mt-8">
-                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[800px]">
-                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                        <span>Lideranças + Leads</span>
-                        <DimensionSelect value={effDimBox4} onChange={setDimBox4} options={optGeneral} />
-                    </h3>
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                         <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Por Volume Consolidado</p>
-                         <SortableBarChartStacked data={crossChartEngajamentoDim.data} invalidValue={crossChartEngajamentoDim.invalid} invalidLabel="Critério Não Mapeado" onLabelClick={(t) => handleLabelClick(effDimBox4, t)} legend1="Lideranças" color1="bg-[#C1272D]" legend2="Leads" color2="bg-black" />
-                    </div>
-                </div>
-
-                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col max-h-[800px]">
-                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0 flex flex-wrap items-center justify-between gap-2">
-                        <span>Votos vs Emendas</span>
-                        <DimensionSelect value={effDimBox5} onChange={setDimBox5} options={optVotos} />
-                    </h3>
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                         <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase shrink-0 mb-2">Comparativo Eleitoral e Destinação</p>
-                         <SortableBarChartStacked data={crossChartVotosEmendasDim.data} invalidValue={crossChartVotosEmendasDim.invalid} invalidLabel="Emendas sem Critério" onLabelClick={(t) => handleLabelClick(effDimBox5, t)} legend1="Votos" color1="bg-[#C1272D]" legend2="Emendas (R$)" color2="bg-[#EAA221]" />
-                    </div>
+                <div className="bg-white border-4 border-black p-4 md:p-6 shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col h-[400px] lg:col-span-2">
+                    <h3 className="text-base md:text-lg font-black uppercase border-b-4 border-black pb-2 mb-4 shrink-0">Lideranças + Leads (Regiões)</h3>
+                    <SortableBarChartStacked data={crossChartEngajamentoRegiao.data} invalidValue={crossChartEngajamentoRegiao.invalid} invalidLabel="Região Não Mapeada" onLabelClick={(t) => handleLabelClick('regiao', t)} legend1="Lideranças" color1="bg-[#C1272D]" legend2="Leads" color2="bg-black" />
                 </div>
             </div>
         </div>
@@ -1572,12 +1502,7 @@ const GlobalStats = () => {
 
     return (
         <div className="space-y-4 md:space-y-6 mb-6">
-            {isMock && (
-                <div className="bg-black text-white p-4 font-black uppercase text-xs flex items-center border-4 border-[#EAA221] shadow-[4px_4px_0_0_#EAA221]">
-                    ⚠️ Demonstração visual (Variáveis não detectadas). Configure as URLs no Vercel para ver dados reais.
-                </div>
-            )}
-            
+            {/* O novo Layout 5 Colunas (5 blocos na mesma linha para lg screens) */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
                 
                 <div className={`col-span-2 lg:col-span-1 border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between ${isFiltroCapital ? 'bg-[#007D8A] text-white' : 'bg-[#EAA221] text-black'}`}>
@@ -1607,29 +1532,27 @@ const GlobalStats = () => {
                 </div>
 
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Briefcase /><span className="ml-1 sm:ml-2">Lideranças (CRM)</span></h3>
-                    <div className="text-3xl sm:text-4xl font-black text-[#C1272D]">{targetContatos.length}</div>
-                    <div className="h-2 w-full bg-black mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Briefcase /><span className="ml-1">Lideranças</span></h3>
+                    <div className="text-2xl sm:text-3xl font-black text-[#C1272D]">{targetContatos.length}</div>
+                    <div className="h-1.5 w-full bg-black mt-2 border border-black"></div>
                 </div>
                 
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Users /><span className="ml-1 sm:ml-2">Leads (Eventos)</span></h3>
-                    <div className="text-3xl sm:text-4xl font-black">{targetLeads.length}</div>
-                    <div className="h-2 w-full bg-[#007D8A] mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Users /><span className="ml-1">Leads (Eventos)</span></h3>
+                    <div className="text-2xl sm:text-3xl font-black">{targetLeads.length}</div>
+                    <div className="h-1.5 w-full bg-[#007D8A] mt-2 border border-black"></div>
                 </div>
                 
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between overflow-hidden">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.FileText /><span className="ml-1 sm:ml-2">Emendas</span></h3>
-                    <div className="text-lg sm:text-2xl font-black truncate" title={formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}>{formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}</div>
-                    <div className="text-[9px] sm:text-[10px] font-bold mt-1 text-gray-400 uppercase">{targetEmendas.length} Ocorrências</div>
-                    <div className="h-2 w-full bg-[#EAA221] mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.FileText /><span className="ml-1">Emendas</span></h3>
+                    <div className="text-xl sm:text-2xl font-black truncate" title={formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}>{formatCurrency(targetEmendas.reduce((acc, curr) => acc + curr.total, 0))}</div>
+                    <div className="h-1.5 w-full bg-[#EAA221] mt-2 border border-black"></div>
                 </div>
                 
                 <div className="bg-white border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between">
-                    <h3 className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-1 sm:ml-2">Agendas</span></h3>
-                    <div className="text-3xl sm:text-4xl font-black">{agendasFuturas} <span className="text-xl sm:text-2xl text-gray-400">/ {targetAgenda.length}</span></div>
-                    <div className="text-[9px] sm:text-[10px] font-bold mt-1 text-gray-400 uppercase">Futuras / Totais</div>
-                    <div className="h-2 w-full bg-[#C1272D] mt-2 border border-black"></div>
+                    <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center"><Icons.Calendar /><span className="ml-1">Agendas</span></h3>
+                    <div className="text-2xl sm:text-3xl font-black">{agendasFuturas} <span className="text-lg sm:text-xl text-gray-400">/ {targetAgenda.length}</span></div>
+                    <div className="h-1.5 w-full bg-[#C1272D] mt-2 border border-black"></div>
                 </div>
             </div>
         </div>
