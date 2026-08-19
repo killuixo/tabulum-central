@@ -40,16 +40,6 @@ const normalizeStr = (str) => {
     return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 };
 
-// Previne quebras se as colunas no Google Sheets mudarem de nome (Maiúsculas, acentos, etc)
-const getField = (obj, fieldName) => {
-    if (!obj || typeof obj !== 'object') return '';
-    const normField = normalizeStr(fieldName);
-    for (const key in obj) {
-        if (normalizeStr(key) === normField) return obj[key];
-    }
-    return '';
-};
-
 const isFloripa = (str) => {
     if (!str) return false;
     const s = normalizeStr(str);
@@ -81,6 +71,16 @@ const getTemaFromOrigem = (origem) => {
     if (/saúde/.test(o)) return "Saúde";
     if (/alimentos|cozinha/.test(o)) return "Segurança Alimentar";
     return "Outros Temas"; 
+};
+
+// Motor interpretador para buscar valores dinamicamente das colunas, evitando quebras
+const getField = (obj, fieldName) => {
+    if (!obj || typeof obj !== 'object') return '';
+    const normField = normalizeStr(fieldName);
+    for (const key in obj) {
+        if (normalizeStr(key) === normField) return obj[key];
+    }
+    return '';
 };
 
 const safeCsvCell = (val) => {
@@ -183,6 +183,7 @@ const AppProvider = ({ children }) => {
                     });
                 }
 
+                // Cria dicionários geográficos para cruzamento rápido
                 const muniToRegiao = {};
                 dadosGerais.estado.forEach(e => { if (e.municipio) muniToRegiao[normalizeStr(e.municipio)] = e.regiao; });
 
@@ -252,7 +253,7 @@ const AppProvider = ({ children }) => {
                         bairro: b,
                         regiao: isFloripa(mun) ? bairroToRegiao[normalizeStr(b)] : muniToRegiao[normalizeStr(mun)],
                         distrito: isFloripa(mun) ? bairroToDistrito[normalizeStr(b)] : null,
-                        tema: '',
+                        tema: '', 
                         articulador: String(getField(a, 'articulador')).trim(),
                         inicio: getField(a, 'inicio') || null
                     };
@@ -301,7 +302,7 @@ const AppProvider = ({ children }) => {
         };
 
         const passesGlobals = (item) => {
-            // Regra estrita: Se o filtro tem valores, o item DEVE possuir a propriedade e estar incluso no filtro.
+            // Lógica OR (OU) dentro da mesma categoria: se o tema do item estiver incluso na lista de temas selecionados
             if (temas.length > 0) {
                 if (!item.tema || !temas.includes(item.tema)) return false;
             }
@@ -365,12 +366,13 @@ const LoadingScreen = ({ loadingInfo }) => {
 };
 
 const Sidebar = () => {
-    const { emendas, leads, contatos, rawCapital, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, mainView, setMainView } = useContext(AppContext);
+    const { rawEmendas, rawContatos, rawCapital, setSelectedEntity, globalFilters, setGlobalFilters, territoryScope, setTerritoryScope, includeFloripa, setIncludeFloripa, mainView, setMainView } = useContext(AppContext);
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
-    const regioesEstado = useMemo(() => [...new Set([...emendas.map(e => e.regiao), ...contatos.map(c => c.regiao)].filter(r => !isInvalidData(r)))].sort(), [emendas, contatos]);
-    const temas = useMemo(() => [...new Set([...emendas.map(e => e.tema), ...contatos.map(c => c.tema)].filter(t => !isInvalidData(t)))].sort(), [emendas, contatos]);
+    // Calcula opções de filtro a partir dos DADOS BRUTOS, assim selecionar um filtro não esconde os outros
+    const regioesEstado = useMemo(() => [...new Set([...rawEmendas.map(e => e.regiao), ...rawContatos.map(c => c.regiao)].filter(r => !isInvalidData(r)))].sort(), [rawEmendas, rawContatos]);
+    const temas = useMemo(() => [...new Set([...rawEmendas.map(e => e.tema), ...rawContatos.map(c => c.tema)].filter(t => !isInvalidData(t)))].sort(), [rawEmendas, rawContatos]);
     
     const regioesFpolis = useMemo(() => [...new Set(rawCapital?.map(c => c.regiao) || [])].filter(r => !isInvalidData(r)).sort(), [rawCapital]);
     const distritosFpolis = useMemo(() => [...new Set(rawCapital?.map(c => c.distrito) || [])].filter(d => !isInvalidData(d)).sort(), [rawCapital]);
@@ -578,13 +580,16 @@ const ThSortable = ({ label, sortKey, currentSort, onSort, widthClass="" }) => {
     );
 };
 
-const DashPanel = ({ title, icon: Icon, colorClass, data, metricType, territoryScope, hasTema = true, onLabelClick }) => {
-    const [dim, setDim] = useState(territoryScope === 'CAPITAL' ? 'bairro' : 'municipio');
+const DashPanel = ({ title, icon: Icon, colorClass, data, metricType, territoryScope, hasTema = true, onLabelClick, defaultDimCapital = 'bairro', defaultDimInterior = 'municipio' }) => {
+    const [dim, setDim] = useState(territoryScope === 'CAPITAL' ? defaultDimCapital : defaultDimInterior);
 
     const options = [];
     if (territoryScope === 'CAPITAL') {
-        options.push({ value: 'bairro', label: 'Bairro' });
-        options.push({ value: 'distrito', label: 'Distrito' });
+        // Remove opções que não fazem sentido para Emendas na Capital (pois emenda raramente tem bairro/distrito atrelado)
+        if (title !== 'Emendas (R$)') {
+            options.push({ value: 'bairro', label: 'Bairro' });
+            options.push({ value: 'distrito', label: 'Distrito' });
+        }
         options.push({ value: 'regiao', label: 'Região' });
     } else {
         options.push({ value: 'municipio', label: 'Município' });
@@ -593,9 +598,17 @@ const DashPanel = ({ title, icon: Icon, colorClass, data, metricType, territoryS
     if (hasTema) options.push({ value: 'tema', label: 'Tema' });
 
     useEffect(() => {
-        if (territoryScope === 'CAPITAL' && dim === 'municipio') setDim('bairro');
-        if (territoryScope === 'INTERIOR' && (dim === 'bairro' || dim === 'distrito')) setDim('municipio');
-    }, [territoryScope]);
+        if (territoryScope === 'CAPITAL') {
+            // Prevenção contra views estilhaçadas. Se dim era municipio e foi pra capital, troca.
+            if (dim === 'municipio' || (title === 'Emendas (R$)' && (dim === 'bairro' || dim === 'distrito'))) {
+                setDim(defaultDimCapital);
+            }
+        } else if (territoryScope === 'INTERIOR') {
+            if (dim === 'bairro' || dim === 'distrito') {
+                setDim(defaultDimInterior);
+            }
+        }
+    }, [territoryScope, title, defaultDimCapital, defaultDimInterior]);
 
     const aggregated = useMemo(() => {
         const map = {};
@@ -662,12 +675,12 @@ const Dashboard = () => {
     return (
         <div className="space-y-6 md:space-y-8 w-full max-w-6xl mx-auto pb-12 animate-fade-in">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-4">
-                <DashPanel title="Votos" icon={Icons.MapPin} data={votosData} metricType="votos" hasTema={false} territoryScope={territoryScope} colorClass="bg-[#C1272D]" onLabelClick={handleLabelClick} />
-                <DashPanel title="Emendas (R$)" icon={Icons.FileText} data={emendas} metricType="sum" hasTema={true} territoryScope={territoryScope} colorClass="bg-[#EAA221]" onLabelClick={handleLabelClick} />
-                <DashPanel title="Agenda" icon={Icons.Calendar} data={agenda} metricType="count" hasTema={false} territoryScope={territoryScope} colorClass="bg-[#007D8A]" onLabelClick={handleLabelClick} />
-                <DashPanel title="Lideranças" icon={Icons.Briefcase} data={contatos} metricType="count" hasTema={true} territoryScope={territoryScope} colorClass="bg-[#C1272D]" onLabelClick={handleLabelClick} />
+                <DashPanel title="Votos" icon={Icons.MapPin} data={votosData} metricType="votos" hasTema={false} territoryScope={territoryScope} colorClass="bg-[#C1272D]" onLabelClick={handleLabelClick} defaultDimCapital="bairro" defaultDimInterior="municipio" />
+                <DashPanel title="Emendas (R$)" icon={Icons.FileText} data={emendas} metricType="sum" hasTema={true} territoryScope={territoryScope} colorClass="bg-[#EAA221]" onLabelClick={handleLabelClick} defaultDimCapital="tema" defaultDimInterior="municipio" />
+                <DashPanel title="Agenda" icon={Icons.Calendar} data={agenda} metricType="count" hasTema={false} territoryScope={territoryScope} colorClass="bg-[#007D8A]" onLabelClick={handleLabelClick} defaultDimCapital="regiao" defaultDimInterior="municipio" />
+                <DashPanel title="Lideranças" icon={Icons.Briefcase} data={contatos} metricType="count" hasTema={true} territoryScope={territoryScope} colorClass="bg-[#C1272D]" onLabelClick={handleLabelClick} defaultDimCapital="bairro" defaultDimInterior="municipio" />
                 <div className="lg:col-span-2">
-                    <DashPanel title="Leads (Eventos)" icon={Icons.Users} data={leads} metricType="count" hasTema={true} territoryScope={territoryScope} colorClass="bg-black" onLabelClick={handleLabelClick} />
+                    <DashPanel title="Leads (Eventos)" icon={Icons.Users} data={leads} metricType="count" hasTema={true} territoryScope={territoryScope} colorClass="bg-black" onLabelClick={handleLabelClick} defaultDimCapital="bairro" defaultDimInterior="municipio" />
                 </div>
             </div>
         </div>
