@@ -40,6 +40,16 @@ const normalizeStr = (str) => {
     return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 };
 
+// Previne quebras se as colunas no Google Sheets mudarem de nome (Maiúsculas, acentos, etc)
+const getField = (obj, fieldName) => {
+    if (!obj || typeof obj !== 'object') return '';
+    const normField = normalizeStr(fieldName);
+    for (const key in obj) {
+        if (normalizeStr(key) === normField) return obj[key];
+    }
+    return '';
+};
+
 const isFloripa = (str) => {
     if (!str) return false;
     const s = normalizeStr(str);
@@ -72,6 +82,34 @@ const getTemaFromOrigem = (origem) => {
     if (/alimentos|cozinha/.test(o)) return "Segurança Alimentar";
     return "Outros Temas"; 
 };
+
+const safeCsvCell = (val) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+};
+
+const exportToCSV = (filename, rows) => {
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.map(safeCsvCell).join(";")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename + ".csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+const ExportToolbar = ({ onCsv, onPdf }) => (
+    <div className="flex justify-end gap-2 mb-4 no-print shrink-0">
+        <button onClick={onCsv} className="bg-black text-white px-4 py-2 font-black uppercase text-[10px] border-2 border-black hover:bg-gray-800 flex items-center transition-colors shadow-[4px_4px_0_0_rgba(17,17,17,1)] active:translate-y-1 active:shadow-none">
+            <Icons.FileText /> <span className="ml-2">Exportar .CSV</span>
+        </button>
+        <button onClick={onPdf} className="bg-white text-black px-4 py-2 font-black uppercase text-[10px] border-2 border-black hover:bg-gray-100 flex items-center transition-colors shadow-[4px_4px_0_0_rgba(17,17,17,1)] active:translate-y-1 active:shadow-none">
+            <Icons.FileText /> <span className="ml-2">Exportar .PDF</span>
+        </button>
+    </div>
+);
 
 const Icons = {
     Search: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
@@ -145,7 +183,6 @@ const AppProvider = ({ children }) => {
                     });
                 }
 
-                // Cria dicionários geográficos para cruzamento rápido
                 const muniToRegiao = {};
                 dadosGerais.estado.forEach(e => { if (e.municipio) muniToRegiao[normalizeStr(e.municipio)] = e.regiao; });
 
@@ -159,23 +196,23 @@ const AppProvider = ({ children }) => {
                 });
 
                 const leads = leadsRaw.map((l, i) => {
-                    const mun = (l['CIDADE'] || l['cidade'] || '').trim();
-                    const b = (l['BAIRRO REVISADO + REPLAN'] || l['bairroReplan'] || l['bairro'] || '').trim();
+                    const mun = String(getField(l, 'cidade')).trim();
+                    const b = String(getField(l, 'bairro revisado + replan') || getField(l, 'bairroreplan') || getField(l, 'bairro')).trim();
                     return {
                         id: `l_${i}`,
-                        nome: l['NOME'] || l['nome'] || 'Anônimo',
+                        nome: String(getField(l, 'nome') || 'Anônimo'),
                         municipio: mun,
                         bairro: b,
                         regiao: isFloripa(mun) ? bairroToRegiao[normalizeStr(b)] : muniToRegiao[normalizeStr(mun)],
                         distrito: isFloripa(mun) ? bairroToDistrito[normalizeStr(b)] : null,
-                        tema: getTemaFromOrigem(l['ORIGEM'] || l['origem'])
+                        tema: getTemaFromOrigem(getField(l, 'origem'))
                     };
                 }).filter(l => l.municipio);
 
                 const emendas = emendasRaw.map((e, i) => {
-                    const mun = (e['MUNICÍPIO'] || e['municipio'] || '').trim();
-                    const razaoSocialRaw = (e['RAZÃO SOCIAL'] || e['razao social'] || '').trim();
-                    const esfera = (e['ESFERA DE APLICAÇÃO'] || e['esfera de aplicação'] || '').trim();
+                    const mun = String(getField(e, 'municipio')).trim();
+                    const razaoSocialRaw = String(getField(e, 'razao social')).trim();
+                    const esfera = String(getField(e, 'esfera de aplicacao')).trim();
                     
                     let razaoSocialFinal = razaoSocialRaw;
                     if (isInvalidData(razaoSocialFinal)) {
@@ -186,23 +223,23 @@ const AppProvider = ({ children }) => {
 
                     return {
                         id: `e_${i}`,
-                        numero: e['NÚMERO DA EMENDA'] || e['numero'] || '',
+                        numero: String(getField(e, 'numero da emenda') || getField(e, 'numero')),
                         municipio: mun,
                         bairro: null,
-                        regiao: (e['REGIÃO'] || e['regiao'] || muniToRegiao[normalizeStr(mun)] || '').trim(),
+                        regiao: String(getField(e, 'regiao') || muniToRegiao[normalizeStr(mun)] || '').trim(),
                         distrito: null,
-                        tema: e['TEMA'] || e['tema'] || '',
-                        objeto: e['OBJETO'] || e['objeto'] || '',
-                        total: parseCurrency(e['TOTAL'] || e['total']),
-                        articulador: (e['ARTICULADOR'] || e['articulador'] || '').trim(),
+                        tema: String(getField(e, 'tema')).trim(),
+                        objeto: String(getField(e, 'objeto')).trim(),
+                        total: parseCurrency(getField(e, 'total')),
+                        articulador: String(getField(e, 'articulador')).trim(),
                         razaoSocial: razaoSocialFinal
                     };
                 }).filter(e => e.numero);
 
                 const agenda = agendaRaw.map((a, i) => {
-                    let mun = (a['Município'] || a['municipio'] || '').trim();
-                    const b = (a['Bairro'] || a['bairro'] || '').trim();
-                    const local = (a['Local'] || '').trim();
+                    let mun = String(getField(a, 'municipio')).trim();
+                    const b = String(getField(a, 'bairro')).trim();
+                    const local = String(getField(a, 'local')).trim();
                     
                     if (!mun && (normalizeStr(b).includes('centro') || normalizeStr(local).includes('alesc') || normalizeStr(local).includes('florianopolis'))) {
                         mun = 'Florianópolis';
@@ -210,32 +247,33 @@ const AppProvider = ({ children }) => {
 
                     return {
                         id: `a_${i}`,
-                        titulo: a['Título'] || a['titulo'] || '',
+                        titulo: String(getField(a, 'titulo')).trim(),
                         municipio: mun,
                         bairro: b,
                         regiao: isFloripa(mun) ? bairroToRegiao[normalizeStr(b)] : muniToRegiao[normalizeStr(mun)],
                         distrito: isFloripa(mun) ? bairroToDistrito[normalizeStr(b)] : null,
-                        tema: '', // Agenda geralmente não tem tema fixo atrelado
-                        articulador: (a['Articulador'] || a['articulador'] || '').trim(),
-                        inicio: a['Início'] || a['inicio'] || null
+                        tema: '',
+                        articulador: String(getField(a, 'articulador')).trim(),
+                        inicio: getField(a, 'inicio') || null
                     };
                 });
 
                 const contatos = contatosRaw.map((c, i) => {
-                    const munBairro = (c['municipio_bairro'] || c['MUNICÍPIO'] || c['Bairro REPLAN'] || '').trim();
-                    const isF = (c['base'] || '').includes('Florianópolis');
+                    const munBairro = String(getField(c, 'municipio_bairro') || getField(c, 'municipio') || getField(c, 'bairro replan')).trim();
+                    const base = String(getField(c, 'base'));
+                    const isF = base.includes('Florianópolis') || base.includes('Florianopolis');
                     
                     return {
                         id: `c_${i}`,
-                        nome: c['lideranca'] || c['LIDERANÇA'] || '',
-                        base: c['base'] || '',
+                        nome: String(getField(c, 'lideranca')).trim(),
+                        base: base,
                         municipio: isF ? 'Florianópolis' : munBairro,
                         bairro: isF ? munBairro : null,
-                        regiao: (c['regiao'] || c['REGIÃO'] || '').trim(),
-                        distrito: (c['distrito'] || c['DISTRITO'] || '').trim(),
-                        tema: c['temas'] || c['TEMAS'] || '',
-                        situacao: c['situacao'] || c['SITUAÇÃO'] || '',
-                        articulador: c['articulador'] || c['ARTICULADOR'] || ''
+                        regiao: String(getField(c, 'regiao')).trim(),
+                        distrito: String(getField(c, 'distrito')).trim(),
+                        tema: String(getField(c, 'temas') || getField(c, 'tema')).trim(),
+                        situacao: String(getField(c, 'situacao')).trim(),
+                        articulador: String(getField(c, 'articulador')).trim()
                     };
                 }).filter(c => c.nome);
 
@@ -251,7 +289,6 @@ const AppProvider = ({ children }) => {
         loadData();
     }, []);
 
-    // Motor Central de Filtragem - Garante que todas as abas e quadros respeitem as escolhas da sidebar
     const filteredContext = useMemo(() => {
         const { leads, emendas, agenda, contatos, estado, capital } = rawData;
         const { temas, regioes, distritos } = globalFilters;
@@ -264,9 +301,16 @@ const AppProvider = ({ children }) => {
         };
 
         const passesGlobals = (item) => {
-            if (temas.length > 0 && item.tema && !temas.includes(item.tema)) return false;
-            if (regioes.length > 0 && item.regiao && !regioes.includes(item.regiao)) return false;
-            if (distritos.length > 0 && item.distrito && !distritos.includes(item.distrito)) return false;
+            // Regra estrita: Se o filtro tem valores, o item DEVE possuir a propriedade e estar incluso no filtro.
+            if (temas.length > 0) {
+                if (!item.tema || !temas.includes(item.tema)) return false;
+            }
+            if (regioes.length > 0) {
+                if (!item.regiao || !regioes.includes(item.regiao)) return false;
+            }
+            if (distritos.length > 0) {
+                if (!item.distrito || !distritos.includes(item.distrito)) return false;
+            }
             return true;
         };
 
@@ -275,16 +319,15 @@ const AppProvider = ({ children }) => {
             emendas: emendas.filter(e => passesTerritory(e.municipio) && passesGlobals(e)),
             agenda: agenda.filter(a => passesTerritory(a.municipio) && passesGlobals(a)),
             contatos: contatos.filter(c => passesTerritory(c.municipio) && passesGlobals(c)),
-            // Votos são geográficos, então filtram apenas por região/distrito, ignorando temas
             estado: estado.filter(e => {
                 if (!passesTerritory(e.municipio)) return false;
-                if (regioes.length > 0 && !regioes.includes(e.regiao)) return false;
+                if (regioes.length > 0 && (!e.regiao || !regioes.includes(e.regiao))) return false;
                 return true;
             }),
             capital: capital.filter(c => {
                 if (territoryScope === 'INTERIOR' && !includeFloripa) return false;
-                if (regioes.length > 0 && !regioes.includes(c.regiao)) return false;
-                if (distritos.length > 0 && !distritos.includes(c.distrito)) return false;
+                if (regioes.length > 0 && (!c.regiao || !regioes.includes(c.regiao))) return false;
+                if (distritos.length > 0 && (!c.distrito || !distritos.includes(c.distrito))) return false;
                 return true;
             })
         };
@@ -326,7 +369,6 @@ const Sidebar = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
-    // Simplificando as opções de filtros buscando direto da base bruta para garantir que opções não sumam ao filtrar
     const regioesEstado = useMemo(() => [...new Set([...emendas.map(e => e.regiao), ...contatos.map(c => c.regiao)].filter(r => !isInvalidData(r)))].sort(), [emendas, contatos]);
     const temas = useMemo(() => [...new Set([...emendas.map(e => e.tema), ...contatos.map(c => c.tema)].filter(t => !isInvalidData(t)))].sort(), [emendas, contatos]);
     
@@ -335,7 +377,7 @@ const Sidebar = () => {
 
     return (
         <>
-            <div className="md:hidden bg-[#EAA221] border-b-4 border-black p-4 flex justify-between items-center z-50">
+            <div className="md:hidden bg-[#EAA221] border-b-4 border-black p-4 flex justify-between items-center z-50 no-print">
                 <div className="flex items-center gap-2">
                     <img src="https://raw.githubusercontent.com/killuixo/tabulum-central/refs/heads/main/icon-192.png" alt="icon" className="w-8 h-8 object-contain" />
                     <div>
@@ -346,7 +388,7 @@ const Sidebar = () => {
                 <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="bg-black text-white p-2 border-2 border-black"><Icons.Filter /></button>
             </div>
 
-            <div className={`fixed inset-y-0 left-0 transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:relative md:translate-x-0 transition duration-200 ease-in-out w-80 bg-[#FDFBF7] border-r-4 border-black flex flex-col z-40 h-full shadow-2xl md:shadow-none`}>
+            <div className={`fixed inset-y-0 left-0 transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:relative md:translate-x-0 transition duration-200 ease-in-out w-80 bg-[#FDFBF7] border-r-4 border-black flex flex-col z-40 h-full shadow-2xl md:shadow-none no-print`}>
                 <div className="hidden md:flex flex-row p-6 border-b-4 border-black bg-[#EAA221] cursor-pointer items-center gap-4" onClick={() => {setSelectedEntity(null); setMainView('dashboard');}}>
                     <img src="https://raw.githubusercontent.com/killuixo/tabulum-central/refs/heads/main/icon-192.png" alt="icon" className="w-16 h-16 object-contain shrink-0" />
                     <div className="flex flex-col justify-center">
@@ -436,7 +478,7 @@ const Sidebar = () => {
                     </div>
                 </div>
             </div>
-            {isMobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>}
+            {isMobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden no-print" onClick={() => setIsMobileMenuOpen(false)}></div>}
         </>
     );
 };
@@ -449,7 +491,7 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, invalid
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
-            <div className="flex justify-end items-center mb-4 border-b-2 border-black pb-2 shrink-0">
+            <div className="flex justify-end items-center mb-4 border-b-2 border-black pb-2 shrink-0 no-print">
                 <button onClick={() => setSortDesc(!sortDesc)} className="text-[10px] font-black uppercase text-gray-500 hover:text-black flex items-center transition-colors">
                     Ordem {sortDesc ? 'Decrescente' : 'Crescente'} {sortDesc ? <Icons.SortDesc /> : <Icons.SortAsc />}
                 </button>
@@ -489,7 +531,7 @@ const SortableBarChart = ({ data, colorClass, valueFormatter = (v) => v, invalid
 
 const DimensionSelect = ({ value, onChange, options }) => (
     <select
-        className="ml-2 bg-transparent text-current cursor-pointer outline-none font-black uppercase text-[10px] md:text-xs border-b-2 border-current hover:bg-black/10 transition-colors"
+        className="ml-2 bg-transparent text-current cursor-pointer outline-none font-black uppercase text-[10px] md:text-xs border-b-2 border-current hover:bg-black/10 transition-colors no-print"
         value={value}
         onChange={(e) => onChange(e.target.value)}
     >
@@ -528,7 +570,7 @@ const ThSortable = ({ label, sortKey, currentSort, onSort, widthClass="" }) => {
         <th onClick={() => onSort(sortKey)} className={`px-4 py-3 font-black border-r-2 border-black cursor-pointer hover:bg-gray-800 hover:text-white transition-colors select-none ${widthClass}`}>
             <div className="flex items-center justify-between gap-2">
                 <span>{label}</span>
-                <span className={`text-gray-400 ${isActive ? 'text-yellow-400' : 'opacity-50'}`}>
+                <span className={`text-gray-400 no-print ${isActive ? 'text-yellow-400' : 'opacity-50'}`}>
                     {isActive ? (currentSort.direction === 'asc' ? '↑' : '↓') : '↕'}
                 </span>
             </div>
@@ -550,7 +592,6 @@ const DashPanel = ({ title, icon: Icon, colorClass, data, metricType, territoryS
     }
     if (hasTema) options.push({ value: 'tema', label: 'Tema' });
 
-    // Ajusta a dimensão automaticamente se o usuário mudar de estado para capital na sidebar
     useEffect(() => {
         if (territoryScope === 'CAPITAL' && dim === 'municipio') setDim('bairro');
         if (territoryScope === 'INTERIOR' && (dim === 'bairro' || dim === 'distrito')) setDim('municipio');
@@ -607,7 +648,6 @@ const Dashboard = () => {
 
     const handleLabelClick = (dim, val) => setSelectedEntity({ type: dim, name: val });
 
-    // Preparando dados de Votos unificados
     const votosData = useMemo(() => {
         let arr = [];
         if (territoryScope !== 'CAPITAL') {
@@ -673,9 +713,18 @@ const ListaMunicipios = () => {
 
     const { items, requestSort, sortConfig } = useSortableData(dadosAgregados, { key: 'votos22', direction: 'desc' });
 
+    const handleCsv = () => {
+        const rows = [
+            ["Município", "Região", "Votos '18", "Votos '22", "Lideranças", "Leads", "Emendas (R$)"],
+            ...items.map(m => [m.municipio, m.regiao, m.votos18, m.votos22, m.numContatos, m.numLeads, m.volEmendas.toFixed(2).replace('.', ',')])
+        ];
+        exportToCSV("RaioX_Estado", rows);
+    };
+
     return (
         <div className="space-y-6 animate-fade-in w-full max-w-6xl mx-auto pb-12">
-            <div className="bg-white border-4 border-black shadow-[6px_6px_0px_0px_#111111] overflow-x-auto">
+            <ExportToolbar onCsv={handleCsv} onPdf={() => window.print()} />
+            <div className="bg-white border-4 border-black print-table-container overflow-x-auto shadow-[6px_6px_0px_0px_#111111]">
                 <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead className="bg-[#111111] text-white border-b-4 border-black text-xs uppercase">
                         <tr>
@@ -738,9 +787,18 @@ const ListaCapital = () => {
 
     const { items, requestSort, sortConfig } = useSortableData(dadosAgregados, { key: 'votos24', direction: 'desc' });
 
+    const handleCsv = () => {
+        const rows = [
+            ["Bairro", "Distrito", "Região", "Votos '22", "Votos '24", "Lideranças", "Leads"],
+            ...items.map(b => [b.bairro, b.distrito, b.regiao, b.votos22, b.votos24, b.numContatos, b.numLeads])
+        ];
+        exportToCSV("RaioX_Capital", rows);
+    };
+
     return (
         <div className="space-y-6 animate-fade-in w-full max-w-6xl mx-auto pb-12">
-            <div className="bg-white border-4 border-black shadow-[6px_6px_0px_0px_#111111] overflow-x-auto">
+            <ExportToolbar onCsv={handleCsv} onPdf={() => window.print()} />
+            <div className="bg-white border-4 border-black print-table-container overflow-x-auto shadow-[6px_6px_0px_0px_#111111]">
                 <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead className="bg-[#111111] text-white border-b-4 border-black text-xs uppercase">
                         <tr>
@@ -801,9 +859,21 @@ const ListaInstituicoes = () => {
 
     const { items, requestSort, sortConfig } = useSortableData(dadosAgregados.main, { key: 'total', direction: 'desc' });
 
+    const handleCsv = () => {
+        const rows = [
+            ["Instituição / Razão Social", "Municípios Atendidos", "Ocorrências", "Total Destinado (R$)"],
+            ...items.map(m => [m.nome, m.locs, m.qty, m.total.toFixed(2).replace('.', ',')])
+        ];
+        if (dadosAgregados.outros.qty > 0) {
+            rows.push([dadosAgregados.outros.nome, dadosAgregados.outros.locs, dadosAgregados.outros.qty, dadosAgregados.outros.total.toFixed(2).replace('.', ',')]);
+        }
+        exportToCSV("RaioX_Instituicoes", rows);
+    };
+
     return (
         <div className="space-y-6 animate-fade-in w-full max-w-6xl mx-auto pb-12">
-            <div className="bg-white border-4 border-black shadow-[6px_6px_0px_0px_#111111] overflow-x-auto">
+            <ExportToolbar onCsv={handleCsv} onPdf={() => window.print()} />
+            <div className="bg-white border-4 border-black print-table-container overflow-x-auto shadow-[6px_6px_0px_0px_#111111]">
                 <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead className="bg-[#111111] text-white border-b-4 border-black text-xs uppercase">
                         <tr>
@@ -831,7 +901,7 @@ const ListaInstituicoes = () => {
                 </table>
             </div>
             {dadosAgregados.outros.qty > 0 && (
-                <div className="p-4 bg-gray-100 border-2 border-dashed border-gray-400 flex justify-between items-center cursor-pointer hover:bg-gray-200 transition-colors shadow-sm" onClick={() => setSelectedEntity({ type: 'instituicao', name: 'Entidades Não Informadas' })}>
+                <div className="p-4 bg-gray-100 border-2 border-dashed border-gray-400 flex justify-between items-center cursor-pointer hover:bg-gray-200 transition-colors shadow-sm no-print" onClick={() => setSelectedEntity({ type: 'instituicao', name: 'Entidades Não Informadas' })}>
                     <div className="flex items-center gap-3">
                         <div className="w-3 h-3 bg-gray-400 border border-black"></div>
                         <div>
@@ -847,7 +917,7 @@ const ListaInstituicoes = () => {
 };
 
 const SistemaTabulum = () => (
-    <div className="space-y-6 w-full max-w-4xl mx-auto pb-12 animate-fade-in">
+    <div className="space-y-6 w-full max-w-4xl mx-auto pb-12 animate-fade-in no-print">
         <div className="bg-black text-white p-8 border-4 border-black shadow-[8px_8px_0_0_rgba(17,17,17,1)]">
             <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tighter mb-2">SISTEMA TABULUM</h1>
             <p className="text-xs md:text-sm font-bold text-gray-300 uppercase tracking-widest">Aplicativos para gestão da informação do mandato de Marquito.</p>
@@ -874,7 +944,6 @@ const SistemaTabulum = () => (
 );
 
 const FichaCompleta = () => {
-    // Usar os dados RAW para a ficha profunda, ignorando os filtros globais aplicados à visão macro
     const { selectedEntity, setSelectedEntity, rawLeads: leads, rawContatos: contatos, rawEmendas: emendas, rawAgenda: agenda, rawEstado: estado, rawCapital: capital } = useContext(AppContext);
     
     const entityData = useMemo(() => {
@@ -938,11 +1007,11 @@ const FichaCompleta = () => {
 
     return (
         <div className="space-y-6 w-full max-w-6xl mx-auto pb-12 animate-fade-in">
-            <button onClick={() => setSelectedEntity(null)} className="bg-black text-white px-4 py-2 font-black uppercase text-[10px] border-4 border-black hover:bg-gray-800 flex items-center w-fit shadow-[4px_4px_0_0_rgba(17,17,17,1)] active:translate-y-1 active:shadow-none">
+            <button onClick={() => setSelectedEntity(null)} className="no-print bg-black text-white px-4 py-2 font-black uppercase text-[10px] border-4 border-black hover:bg-gray-800 flex items-center w-fit shadow-[4px_4px_0_0_rgba(17,17,17,1)] active:translate-y-1 active:shadow-none">
                 &larr; Voltar
             </button>
-            <div className="bg-white p-6 md:p-8 border-4 border-black shadow-[8px_8px_0_0_rgba(17,17,17,1)] relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-[#111] border-l-4 border-b-4 border-black"></div>
+            <div className="bg-white p-6 md:p-8 border-4 border-black shadow-[8px_8px_0_0_rgba(17,17,17,1)] relative overflow-hidden print-table-container">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-[#111] border-l-4 border-b-4 border-black no-print"></div>
                 <span className="inline-block px-3 py-1 bg-[#EAA221] text-black text-[10px] font-black uppercase tracking-widest border-2 border-black mb-4">
                     Ficha Analítica: {selectedEntity.type}
                 </span>
@@ -964,10 +1033,8 @@ const FichaCompleta = () => {
                     </div>
                 )}
             </div>
-            {/* Containers de dados de CRM removidos por brevidade e integrados à tela limpa principal, mas seguem aqui a estética */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                 {/* Lideranças */}
-                 <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col lg:col-span-2">
+                 <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] print-table-container flex flex-col lg:col-span-2">
                     <div className="p-4 bg-[#C1272D] text-white border-b-4 border-black flex justify-between items-center">
                         <h3 className="font-black uppercase flex items-center text-sm"><Icons.Briefcase/><span className="ml-2">Lideranças Estratégicas</span></h3>
                         <span className="font-black text-sm bg-black border-2 border-white px-2">{entityData.contatos.length}</span>
@@ -981,8 +1048,7 @@ const FichaCompleta = () => {
                         )) : <div className="text-center text-gray-400 font-bold uppercase text-xs py-4">Sem registros.</div>}
                     </div>
                 </div>
-                {/* Emendas */}
-                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] flex flex-col lg:col-span-2">
+                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_rgba(17,17,17,1)] print-table-container flex flex-col lg:col-span-2">
                     <div className="p-4 bg-[#EAA221] border-b-4 border-black flex justify-between items-center">
                         <h3 className="font-black uppercase flex items-center text-sm"><Icons.FileText/><span className="ml-2">Emendas (Total: {formatCurrency(valTotal)})</span></h3>
                         <span className="font-black text-sm bg-white border-2 border-black px-2">{entityData.emendas.length}</span>
@@ -1026,7 +1092,7 @@ const GlobalStats = () => {
     const isFiltroCapital = mainView === 'lista_floripa' || territoryScope === 'CAPITAL';
 
     return (
-        <div className="space-y-4 md:space-y-6 mb-6">
+        <div className="space-y-4 md:space-y-6 mb-6 no-print">
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
                 <div className={`col-span-2 lg:col-span-1 border-4 border-black p-3 sm:p-4 shadow-[4px_4px_0_0_rgba(17,17,17,1)] flex flex-col justify-between ${isFiltroCapital ? 'bg-[#007D8A] text-white' : 'bg-[#EAA221] text-black'}`}>
                     <div className="flex justify-between items-start mb-2">
@@ -1071,11 +1137,11 @@ const AppContent = () => {
     return (
         <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#FDFBF7] text-[#111111] font-sans relative">
             <Sidebar />
-            <main className="flex-1 flex flex-col overflow-hidden relative">
-                <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#111 1.5px, transparent 1.5px)', backgroundSize: '24px 24px' }}></div>
+            <main className="flex-1 flex flex-col overflow-hidden relative print-main">
+                <div className="absolute inset-0 opacity-[0.04] pointer-events-none no-print" style={{ backgroundImage: 'radial-gradient(#111 1.5px, transparent 1.5px)', backgroundSize: '24px 24px' }}></div>
                 
                 {!selectedEntity && (
-                    <div className="flex border-b-4 border-black bg-white z-10 shadow-sm shrink-0 overflow-x-auto custom-scrollbar">
+                    <div className="flex border-b-4 border-black bg-white z-10 shadow-sm shrink-0 overflow-x-auto custom-scrollbar no-print">
                         <button onClick={() => setMainView('dashboard')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'dashboard' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}>Painel Analítico</button>
                         <button onClick={() => setMainView('lista_sc')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_sc' ? 'bg-[#EAA221] text-black' : 'hover:bg-gray-100'}`}>Raio-X: Estado</button>
                         <button onClick={() => setMainView('lista_floripa')} className={`p-4 font-black uppercase text-xs sm:text-sm tracking-widest border-r-4 border-black transition-colors whitespace-nowrap ${mainView === 'lista_floripa' ? 'bg-[#007D8A] text-white' : 'hover:bg-gray-100'}`}>Raio-X: Capital</button>
@@ -1084,7 +1150,7 @@ const AppContent = () => {
                     </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 relative z-10 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 relative z-10 custom-scrollbar print-main">
                     {selectedEntity ? <FichaCompleta /> : (
                         <>
                             <GlobalStats />
@@ -1111,6 +1177,19 @@ export default function App() {
                 * { scrollbar-color: #111 #FDFBF7; }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+                
+                @media print {
+                    .no-print { display: none !important; }
+                    body { background: white !important; }
+                    .print-table-container { box-shadow: none !important; border: 2px solid black !important; }
+                    .print-main { overflow: visible !important; height: auto !important; position: static !important; }
+                    .custom-scrollbar { overflow: visible !important; }
+                    .flex-1 { display: block !important; width: 100% !important; }
+                    .h-screen { height: auto !important; }
+                    .w-full { width: 100% !important; }
+                    table { font-size: 10px !important; width: 100% !important; min-width: 100% !important; }
+                    th, td { padding: 4px !important; }
+                }
             `}} />
             <AppContent />
         </AppProvider>
